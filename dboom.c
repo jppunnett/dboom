@@ -9,6 +9,10 @@
 
 #include "dboom.h"
 
+#define DEFAULT_REQUESTS    10
+#define DEFAULT_CONCURR     5
+#define DEFAULT_TIMEOUT     5000    // ms
+
 int main(int argc, char **argv) {
 
     srand(time(NULL));
@@ -39,10 +43,10 @@ int main(int argc, char **argv) {
     if(optind == argc) usage();
     /* TODO: Accept > 1 URL */
     const char* url = argv[optind];
-    /* Validate option args */
-    int nreqs = getRequests(requests, DEFAULT_REQUESTS);
-    int nconcurr = getConcurrentReqs(concurr, DEFAULT_CONCURR);
-    int ntimeout = getTimeout(timeout, DEFAULT_TIMEOUT);
+    /* Validate program args */
+    unsigned int nreqs = getRequests(requests);
+    int nconcurr = getConcurrentReqs(concurr);
+    int ntimeout = getTimeout(timeout);
 
     printf("Running dboom\n\
         Url: %s\n\
@@ -50,13 +54,14 @@ int main(int argc, char **argv) {
         Concurrent Requests: %d\n\
         Timeout: %d ms\n", url, nreqs, nconcurr, ntimeout);
     
-    /* Each boom() coroutine writes to this channel when done */
+    /* Each boom() coroutine writes to this channel when done. This allows 
+       main() to wait for all boom() coroutines to complete before exiting. */
     int done_ch = channel(sizeof(int), 0);
-    /* Each boom() coroutine uses this channel to send stats. */
-    /* TODO: stats channel should include more than response time. */
+    /* Each boom() coroutine uses this channel to record statistics. */
+    /* TODO: stats channel should include more than response time in ms. */
     int stats_ch = channel(sizeof(int), 0);
-    /* Each stats() coroutine and main() uses this channel to control
-       shutdown. */
+    /* stats() coroutine and main() uses this channel to control stats
+       cleanup and shutdown. */
     int stop_ch = channel(sizeof(int), 0);
 
     if(done_ch < 0 || stats_ch < 0 || stop_ch < 0) {
@@ -65,7 +70,7 @@ int main(int argc, char **argv) {
     }
 
     int rc = 0;
-    /* Launch coroutine that captures stats */
+    /* Launch coroutine for recording statistics */
     rc = go(stats(stats_ch, stop_ch));
     if(rc < 0) {
         perror("main() - go() failed");
@@ -100,7 +105,7 @@ int main(int argc, char **argv) {
     exit(EXIT_SUCCESS);
 }
 
-coroutine void boom(const char* url, int nreqs, int timeout,
+coroutine void boom(const char* url, unsigned int nreqs, int timeout,
                     int done_ch, int stats_ch) {
     int rc = 0;
     int resptime = 0;
@@ -124,7 +129,7 @@ coroutine void stats(int stats_ch, int stop_ch)
     int nrequests = 0;
     int stop = 0;
     int resptime = 0;
-    int total = 0;
+    unsigned int total = 0;
 
     struct chclause clauses[] = {
         {CHRECV, stop_ch, &stop, sizeof(stop)},
@@ -157,18 +162,18 @@ void usage()
     exit(EXIT_FAILURE);
 }
 
-int getRequests(const char *requests, int defaultval)
+int getRequests(const char *requests)
 {
-    int nrequests = requests ? atoi(requests) : defaultval;
-    return nrequests;
+    int nrequests = requests ? atoi(requests) : DEFAULT_REQUESTS;
+    return nrequests ? nrequests : DEFAULT_REQUESTS;
 }
 
-int getConcurrentReqs(const char *concurr, int defaultval)
+int getConcurrentReqs(const char *concurr)
 {
-    return defaultval;
+    return concurr ? atoi(concurr) : DEFAULT_CONCURR;
 }
 
-int getTimeout(const char *timeout, int defaultval)
+int getTimeout(const char *timeout)
 {
-    return defaultval;
+    return timeout ? atoi(timeout) : DEFAULT_TIMEOUT;
 }

@@ -1,11 +1,7 @@
-#define DEFAULT_REQUESTS    10
-#define DEFAULT_CONCURR     5
-#define DEFAULT_TIMEOUT     5000    // ms
-
-int getRequests(const char*, int);
-int getConcurrentReqs(const char*, int);
-int getTimeout(const char*, int);
+int getRequests(const char*);
+int getConcurrentReqs(const char*);
+int getTimeout(const char*);
 void usage();
 
-coroutine void boom(const char*, int, int, int, int);
+coroutine void boom(const char*, unsigned int, int, int, int);
 coroutine void stats(int, int);
