@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <signal.h>
 
 #include "dboom.h"
 
@@ -33,7 +34,8 @@ int main(int argc, char **argv) {
             break;  // Unreachable
         }
     }
-    /* Exit if not url provided */
+
+    /* Exit if no url provided */
     if(optind == argc) usage();
     /* TODO: Accept > 1 URL */
     const char* url = argv[optind];
@@ -50,29 +52,35 @@ int main(int argc, char **argv) {
     
     /* Each boom() coroutine writes to this channel when done */
     int done_ch = channel(sizeof(int), 0);
-    /* The boom() and stat() coroutines check this channel to see if they need
-       to stop (e.g. user interruption or runtime error.) */
-    int quit_ch = channel(sizeof(int), 0);
     /* Each boom() coroutine uses this channel to send stats. */
     /* TODO: stats channel should include more than response time. */
     int stats_ch = channel(sizeof(int), 0);
+    /* Each stats() coroutine and main() uses this channel to control
+       shutdown. */
+    int stop_ch = channel(sizeof(int), 0);
 
-    if(done_ch < 0 || quit_ch < 0 || stats_ch < 0) {
-        perror("channel() failed");
+    if(done_ch < 0 || stats_ch < 0 || stop_ch < 0) {
+        perror("main() - channel() failed");
         exit(EXIT_FAILURE);
     }
+
+    int rc = 0;
+    /* Launch coroutine that captures stats */
+    rc = go(stats(stats_ch, stop_ch));
+    if(rc < 0) {
+        perror("main() - go() failed");
+        exit(EXIT_FAILURE);
+    }
+
     /* Launch nconcurr coroutines, each one sending nreqs/nconcurr requests. */
-    for(int i, cr = 0; i < nconcurr; ++i) {
-        cr = go(boom(url, nreqs/nconcurr, ntimeout,
-                     done_ch, stats_ch, quit_ch));
-        if(cr < 0) {
-            perror("go() failed");
+    for(int i; i < nconcurr; ++i) {
+        rc = go(boom(url, nreqs/nconcurr, ntimeout, done_ch, stats_ch));
+        if(rc < 0) {
+            perror("main() - go() failed");
             exit(EXIT_FAILURE);
         }
     }
-
     /* Wait for boom() coroutines to end */
-    int rc = 0;
     int done = 0;
     for(int i = nconcurr; i > 0; --i) {
         rc = chrecv(done_ch, &done, sizeof(done), -1);
@@ -81,24 +89,66 @@ int main(int argc, char **argv) {
             exit(EXIT_FAILURE);
         }
     }
+    /* Tell stats coroutine to end */
+    int stop = 1;
+    rc = chsend(stop_ch, &stop, sizeof(stop), -1);
+    if(rc != 0) perror("main() - chsend() failed");
+    /* Wait for stats to end */
+    rc = chrecv(stop_ch, &stop, sizeof(stop), -1);
+    if(rc != 0) perror("main() - chrecv() failed");
+
     exit(EXIT_SUCCESS);
 }
 
 coroutine void boom(const char* url, int nreqs, int timeout,
-                    int done_ch, int stats_ch, int quit_ch) {
-    printf("Entering boom()\n");
-    printf("boom: url=%s, nreq=%d, timeout=%d\n\
-           done_ch=%d, stats_ch=%d, quit_ch=%d\n", url, nreqs, timeout,
-           done_ch, stats_ch, quit_ch);
-
-    /* do work... */
-    msleep(now() + (1000 + (rand() % 5000)));
-    /* clean up ... */
-    printf("Cleaning up boom()\n");
-    /* Signal done */
+                    int done_ch, int stats_ch) {
+    int rc = 0;
+    int resptime = 0;
+    /* Send requests until no more requests */
+    for(int i = nreqs; i > 0; --i) {
+        /* Do work... */
+        msleep(now() + (1000 + (rand() % 3000)));
+        resptime = rand() % 1000;
+        rc = chsend(stats_ch, &resptime, sizeof(resptime), -1);
+        if(rc != 0) perror("boom() - chsend() failed");
+    }
+    /* clean up and signal done */
     int done = 1;
-    int rc = chsend(done_ch, &done, sizeof(done), -1);
+    rc = chsend(done_ch, &done, sizeof(done), -1);
     if(rc != 0) perror("boom() - chsend() failed");
+}
+
+coroutine void stats(int stats_ch, int stop_ch)
+{
+    int rc = 0;
+    int nrequests = 0;
+    int stop = 0;
+    int resptime = 0;
+    int total = 0;
+
+    struct chclause clauses[] = {
+        {CHRECV, stop_ch, &stop, sizeof(stop)},
+        {CHRECV, stats_ch, &resptime, sizeof(resptime)}
+    };
+    
+    while(stop == 0) {
+        rc = choose(clauses, 2, -1);
+        if(rc < 0) {
+            perror("stats() - choose() failed");
+            break;
+        }
+        if(rc == 1) {
+            /* Stats for a request available */
+            nrequests++;
+            printf("request: %d\tms: %d\n", nrequests, resptime);
+            total += resptime;
+        }
+    }
+    /* Display stats and signal done */
+    printf("Avg response time for %d requests: %d\n", nrequests, total/nrequests);
+
+    rc = chsend(stop_ch, &stop, sizeof(stop), -1);
+    if(rc != 0) perror("stats() - chsend() failed");
 }
 
 void usage()
@@ -109,7 +159,8 @@ void usage()
 
 int getRequests(const char *requests, int defaultval)
 {
-    return defaultval;
+    int nrequests = requests ? atoi(requests) : defaultval;
+    return nrequests;
 }
 
 int getConcurrentReqs(const char *concurr, int defaultval)
