@@ -8,6 +8,7 @@
 #include <signal.h>
 
 #include "dboom.h"
+#include "req.h"
 
 #define DEFAULT_REQUESTS    10
 #define DEFAULT_CONCURR     5
@@ -108,12 +109,9 @@ int main(int argc, char **argv) {
 coroutine void boom(const char* url, unsigned int nreqs, int timeout,
                     int done_ch, int stats_ch) {
     int rc = 0;
-    int resptime = 0;
     /* Send requests until no more requests */
     for(int i = nreqs; i > 0; --i) {
-        /* Do work... */
-        msleep(now() + (1000 + (rand() % 3000)));
-        resptime = rand() % 1000;
+        int resptime = MakeRequest(url, timeout);
         rc = chsend(stats_ch, &resptime, sizeof(resptime), -1);
         if(rc != 0) perror("boom() - chsend() failed");
     }
@@ -145,13 +143,12 @@ coroutine void stats(int stats_ch, int stop_ch)
         if(rc == 1) {
             /* Stats for a request available */
             nrequests++;
-            printf("request: %d\tms: %d\n", nrequests, resptime);
             total += resptime;
         }
     }
     /* Display stats and signal done */
     printf("Avg response time for %d requests: %d\n", nrequests, total/nrequests);
-
+    /* signal done to main */
     rc = chsend(stop_ch, &stop, sizeof(stop), -1);
     if(rc != 0) perror("stats() - chsend() failed");
 }
