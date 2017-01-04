@@ -4,7 +4,9 @@ Boom using libdill and dsock C libraries.
 A C version of "hey" (https://github.com/rakyll/hey) using the excellent:
 
 - libdill (https://github.com/sustrik/libdill) and
-- dsock (https://github.com/sustrik/dsock)
+- libcurl (https://curl.haxx.se/libcurl)
+
+I would have loved to have used dsock, but it's not quite ready for prime time.
 
 ## Usage
 
