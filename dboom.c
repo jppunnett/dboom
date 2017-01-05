@@ -13,6 +13,14 @@
 #define DEFAULT_CONCURR     5
 #define DEFAULT_TIMEOUT     5000    // ms
 
+static int getRequests(const char*);
+static int getConcurrentReqs(const char*);
+static int getTimeout(const char*);
+static void usage();
+
+coroutine void boom(const char*, unsigned int, int, int, int);
+coroutine void stats(int, int);
+
 int main(int argc, char **argv) {
 
     char *requests = NULL;
