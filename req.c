@@ -3,6 +3,7 @@
 /* For now() */
 #include <libdill.h>
 #include "req.h"
+#include "dboom.h"
 
 /* libcurl write function. Drops all data. */
 static size_t
@@ -11,14 +12,15 @@ dropDataCallback(void *contents, size_t size, size_t nmemb, void *userp)
     return size * nmemb;
 }
 
-
-int MakeRequest(const char* url, int timeout)
+void MakeRequest(const char* url, int timeout, struct reqstats *rsp)
 {
+    if(!rsp);
+
     /* TODO: is this the right way to use the curl easy interface?
        I.e once per request? I doubt it... */
 
     /* request timer */
-    int64_t reqtm = 0;
+    rsp->tm = 0;
 
     /* Must pass something to dropDataCallback */
     int dummy = 0;
@@ -40,13 +42,11 @@ int MakeRequest(const char* url, int timeout)
         /* Perform the request, res will get the return code */
         int64_t start = now();
         res = curl_easy_perform(curl);
-        reqtm = now() - start;
+        rsp->tm = now() - start;
         if(res != CURLE_OK)
             fprintf(stderr, "curl_easy_perform() failed: %s",
                 curl_easy_strerror(res));
 
         curl_easy_cleanup(curl);
     }
-
-    return reqtm;    
 }

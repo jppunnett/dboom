@@ -1,4 +1,6 @@
 /* req.h contains functions for making http requests */
 
+struct reqstats;
+
 /* MakeRequest issues a GET for the resource pointed to by url */
-int MakeRequest(const char* url, int timeout);
+void MakeRequest(const char*, int, struct reqstats*);

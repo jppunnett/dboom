@@ -56,8 +56,7 @@ int main(int argc, char **argv) {
        main() to wait for all boom() coroutines to complete before exiting. */
     int done_ch = chmake(sizeof(int));
     /* Each boom() coroutine uses this channel to record statistics. */
-    /* TODO: stats channel should include more than response time in ms. */
-    int stats_ch = chmake(sizeof(int));
+    int stats_ch = chmake(sizeof(struct reqstats));
     /* stats() coroutine and main() uses this channel to control stats
        cleanup and shutdown. */
     int stop_ch = chmake(sizeof(int));
@@ -108,8 +107,9 @@ coroutine void boom(const char* url, unsigned int nreqs, int timeout,
     int rc = 0;
     /* Send requests until no more requests */
     for(int i = nreqs; i > 0; --i) {
-        int resptime = MakeRequest(url, timeout);
-        rc = chsend(stats_ch, &resptime, sizeof(resptime), -1);
+        struct reqstats rs;
+        MakeRequest(url, timeout, &rs);
+        rc = chsend(stats_ch, &rs, sizeof(rs), -1);
         if(rc != 0) perror("boom() - chsend() failed");
     }
     /* clean up and signal done */
@@ -123,12 +123,12 @@ coroutine void stats(int stats_ch, int stop_ch)
     int rc = 0;
     int nrequests = 0;
     int stop = 0;
-    int resptime = 0;
+    struct reqstats rs;
     unsigned int total = 0;
 
     struct chclause clauses[] = {
         {CHRECV, stop_ch, &stop, sizeof(stop)},
-        {CHRECV, stats_ch, &resptime, sizeof(resptime)}
+        {CHRECV, stats_ch, &rs, sizeof(rs)}
     };
     
     while(stop == 0) {
@@ -140,7 +140,7 @@ coroutine void stats(int stats_ch, int stop_ch)
         if(rc == 1) {
             /* Stats for a request available */
             nrequests++;
-            total += resptime;
+            total += rs.tm;
         }
     }
     /* Display stats and signal done */
@@ -150,23 +150,27 @@ coroutine void stats(int stats_ch, int stop_ch)
     if(rc != 0) perror("stats() - chsend() failed");
 }
 
+static
 void usage()
 {
     fprintf(stderr, "Usage: dboom [-n nreqs] [-c nconcurr] [-t timeoutms] URL.\n");
     exit(EXIT_FAILURE);
 }
 
+static
 int getRequests(const char *requests)
 {
     int nrequests = requests ? atoi(requests) : DEFAULT_REQUESTS;
     return nrequests ? nrequests : DEFAULT_REQUESTS;
 }
 
+static
 int getConcurrentReqs(const char *concurr)
 {
     return concurr ? atoi(concurr) : DEFAULT_CONCURR;
 }
 
+static
 int getTimeout(const char *timeout)
 {
     return timeout ? atoi(timeout) : DEFAULT_TIMEOUT;
