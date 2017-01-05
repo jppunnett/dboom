@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <signal.h>
 
 #include "dboom.h"
@@ -15,8 +14,6 @@
 #define DEFAULT_TIMEOUT     5000    // ms
 
 int main(int argc, char **argv) {
-
-    srand(time(NULL));
 
     char *requests = NULL;
     char *concurr = NULL;
@@ -69,15 +66,13 @@ int main(int argc, char **argv) {
         perror("main() - channel() failed");
         exit(EXIT_FAILURE);
     }
-
-    int rc = 0;
     /* Launch coroutine for recording statistics */
+    int rc = 0;
     rc = go(stats(stats_ch, stop_ch));
     if(rc < 0) {
         perror("main() - go() failed");
         exit(EXIT_FAILURE);
     }
-
     /* Launch nconcurr coroutines, each one sending nreqs/nconcurr requests. */
     for(int i; i < nconcurr; ++i) {
         rc = go(boom(url, nreqs/nconcurr, ntimeout, done_ch, stats_ch));
@@ -102,7 +97,9 @@ int main(int argc, char **argv) {
     /* Wait for stats to end */
     rc = chrecv(stop_ch, &stop, sizeof(stop), -1);
     if(rc != 0) perror("main() - chrecv() failed");
-
+    
+    /* TODO: Clean up libdill resources */
+    
     exit(EXIT_SUCCESS);
 }
 
