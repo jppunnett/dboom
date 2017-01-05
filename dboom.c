@@ -57,13 +57,13 @@ int main(int argc, char **argv) {
     
     /* Each boom() coroutine writes to this channel when done. This allows 
        main() to wait for all boom() coroutines to complete before exiting. */
-    int done_ch = channel(sizeof(int), 0);
+    int done_ch = chmake(sizeof(int));
     /* Each boom() coroutine uses this channel to record statistics. */
     /* TODO: stats channel should include more than response time in ms. */
-    int stats_ch = channel(sizeof(int), 0);
+    int stats_ch = chmake(sizeof(int));
     /* stats() coroutine and main() uses this channel to control stats
        cleanup and shutdown. */
-    int stop_ch = channel(sizeof(int), 0);
+    int stop_ch = chmake(sizeof(int));
 
     if(done_ch < 0 || stats_ch < 0 || stop_ch < 0) {
         perror("main() - channel() failed");
