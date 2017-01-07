@@ -70,42 +70,60 @@ int main(int argc, char **argv) {
     int stop_ch = chmake(sizeof(int));
 
     if(done_ch < 0 || stats_ch < 0 || stop_ch < 0) {
-        perror("main() - channel() failed");
+        perror("Could not create channel");
         exit(EXIT_FAILURE);
     }
     /* Launch coroutine for recording statistics */
-    int rc = 0;
-    rc = go(stats(stats_ch, stop_ch));
-    if(rc < 0) {
-        perror("main() - go() failed");
+    int stats_cor = 0;
+    stats_cor = go(stats(stats_ch, stop_ch));
+    if(stats_cor < 0) {
+        perror("Could not start stats coroutine");
         exit(EXIT_FAILURE);
     }
     /* Launch nconcurr coroutines, each one sending nreqs/nconcurr requests. */
-    for(int i; i < nconcurr; ++i) {
-        rc = go(boom(url, nreqs/nconcurr, ntimeout, done_ch, stats_ch));
-        if(rc < 0) {
-            perror("main() - go() failed");
+    int *pcoh = malloc(nconcurr * sizeof(int));
+    if(pcoh == NULL) {
+        perror("Could not allocate memory for coroutine handles");
+        exit(EXIT_FAILURE);
+    }
+    for(int i = 0; i < nconcurr; ++i) {
+        pcoh[i] = go(boom(url, nreqs/nconcurr, ntimeout, done_ch, stats_ch));
+        if(pcoh[i] < 0) {
+            perror("Could not launch coroutine");
             exit(EXIT_FAILURE);
         }
     }
     /* Wait for boom() coroutines to end */
+    int rc = 0;
     int done = 0;
     for(int i = nconcurr; i > 0; --i) {
         rc = chrecv(done_ch, &done, sizeof(done), -1);
         if(rc != 0) {
-            perror("main() - chrecv() failed");
+            perror("Could not receive on done_ch");
             exit(EXIT_FAILURE);
         }
     }
     /* Tell stats coroutine to end */
     int stop = 1;
     rc = chsend(stop_ch, &stop, sizeof(stop), -1);
-    if(rc != 0) perror("main() - chsend() failed");
+    if(rc != 0) perror("Failed to send on stop_ch");
     /* Wait for stats to end */
     rc = chrecv(stop_ch, &stop, sizeof(stop), -1);
-    if(rc != 0) perror("main() - chrecv() failed");
+    if(rc != 0) perror("Failed to receive on stop_ch");
     
-    /* TODO: Clean up libdill resources */
+    /* Clean up resources */
+
+    /* Coroutines */
+    for(int i = 0; i < nconcurr; ++i) {
+        if(hclose(pcoh[i])) perror("Could not close boom coroutine");
+    }
+    if(hclose(stats_cor)) perror("Could not close stats coroutine");
+    /* Channels */    
+    if(hclose(done_ch)) perror("Could not close done_ch");
+    if(hclose(stats_ch)) perror("Could not close stats_ch");
+    if(hclose(stop_ch)) perror("Could not close stop_ch");
+    /* Memory for coroutine array */
+    free(pcoh);
     
     exit(EXIT_SUCCESS);
 }
