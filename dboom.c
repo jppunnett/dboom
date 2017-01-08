@@ -13,8 +13,8 @@
 #define DEFAULT_CONCURR     5
 #define DEFAULT_TIMEOUT     5000    // ms
 
-static int getRequests(const char*);
-static int getConcurrentReqs(const char*);
+static unsigned int getRequests(const char*);
+static unsigned int getConcurrentReqs(const char*);
 static int getTimeout(const char*);
 static void usage();
 
@@ -51,8 +51,23 @@ int main(int argc, char **argv) {
     const char* url = argv[optind];
     /* Validate program args */
     unsigned int nreqs = getRequests(requests);
-    int nconcurr = getConcurrentReqs(concurr);
+    unsigned int nconcurr = getConcurrentReqs(concurr);
     int ntimeout = getTimeout(timeout);
+    if(nreqs == 0 || nconcurr == 0) {
+        fprintf(stderr,
+            "The number of requests (%d) and the number of"
+             "concurrent requests (%d) must be greater than 0.\n",
+             nreqs, nconcurr);
+        exit(EXIT_FAILURE);
+    }
+    /* The number of requests cannot be less than the number of concurrent
+       requests. */
+    if(nreqs < nconcurr) {
+        fprintf(stderr,
+            "The number of requests (%d) cannot be less than the number of "
+             "concurrent requests (%d)\n", nreqs, nconcurr);
+        exit(EXIT_FAILURE);
+    }
 
     printf("Running dboom\n\
         Url: %s\n\
@@ -114,9 +129,8 @@ int main(int argc, char **argv) {
     /* Clean up resources */
 
     /* Coroutines */
-    for(int i = 0; i < nconcurr; ++i) {
+    for(int i = 0; i < nconcurr; ++i)
         if(hclose(pcoh[i])) perror("Could not close boom coroutine");
-    }
     if(hclose(stats_cor)) perror("Could not close stats coroutine");
     /* Channels */    
     if(hclose(done_ch)) perror("Could not close done_ch");
@@ -184,14 +198,13 @@ void usage()
 }
 
 static
-int getRequests(const char *requests)
+unsigned int getRequests(const char *requests)
 {
-    int nrequests = requests ? atoi(requests) : DEFAULT_REQUESTS;
-    return nrequests ? nrequests : DEFAULT_REQUESTS;
+    return requests ? atoi(requests) : DEFAULT_REQUESTS;
 }
 
 static
-int getConcurrentReqs(const char *concurr)
+unsigned int getConcurrentReqs(const char *concurr)
 {
     return concurr ? atoi(concurr) : DEFAULT_CONCURR;
 }
