@@ -184,7 +184,7 @@ coroutine void stats(int stats_ch, int stop_ch)
         }
     }
     /* Display stats and signal done */
-    printf("Avg response time for %d requests: %d\n", nrequests, total/nrequests);
+    printf("Avg response time for %d requests: %d ms\n", nrequests, total/nrequests);
     /* signal done to main */
     rc = chsend(stop_ch, &stop, sizeof(stop), -1);
     if(rc != 0) perror("stats() - chsend() failed");
