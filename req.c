@@ -44,7 +44,7 @@ void MakeRequest(const char* url, int timeout, struct reqstats *rsp)
         res = curl_easy_perform(curl);
         rsp->tm = now() - start;
         if(res != CURLE_OK)
-            fprintf(stderr, "curl_easy_perform() failed: %s",
+            fprintf(stderr, "curl_easy_perform() failed: %s\n",
                 curl_easy_strerror(res));
 
         curl_easy_cleanup(curl);
