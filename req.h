@@ -5,8 +5,11 @@
 /* Forward decl */
 struct reqstats;
 
-/* MakeRequest: issues a GET for the resource pointed to by url */
-void MakeRequest(const char*, int, struct reqstats*);
+/* MakeRequest: issues a GET for the resource pointed to by url
+   Returns 0 if got a response from server, otherwise returns -1.
+   reqstats contains server response time and HTTP code.
+*/
+int MakeRequest(const char*, int, struct reqstats*);
 
 #endif
 

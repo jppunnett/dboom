@@ -1,4 +1,5 @@
 /* req.c */
+#include <assert.h>
 #include <curl/curl.h>
 /* For now() */
 #include <libdill.h>
@@ -12,15 +13,16 @@ dropDataCallback(void *contents, size_t size, size_t nmemb, void *userp)
     return size * nmemb;
 }
 
-void MakeRequest(const char* url, int timeout, struct reqstats *rsp)
-{
-    if(!rsp);
 
+int
+MakeRequest(const char* url, int timeout, struct reqstats *rsp)
+{
     /* TODO: is this the right way to use the curl easy interface?
        I.e once per request? I doubt it... */
 
-    /* request timer */
-    rsp->tm = 0;
+    int rc = 0;
+
+    assert(rsp->tm == 0);
 
     /* Must pass something to dropDataCallback */
     int dummy = 0;
@@ -43,10 +45,13 @@ void MakeRequest(const char* url, int timeout, struct reqstats *rsp)
         int64_t start = now();
         res = curl_easy_perform(curl);
         rsp->tm = now() - start;
-        if(res != CURLE_OK)
+        if(res != CURLE_OK) {
             fprintf(stderr, "curl_easy_perform() failed: %s\n",
                 curl_easy_strerror(res));
+            rc = -1;
+        }
 
         curl_easy_cleanup(curl);
     }
+    return rc;
 }

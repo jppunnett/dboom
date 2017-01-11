@@ -148,9 +148,10 @@ coroutine void boom(const char* url, unsigned int nreqs, int timeout,
     /* Send requests until no more requests */
     for(int i = nreqs; i > 0; --i) {
         struct reqstats rs;
-        MakeRequest(url, timeout, &rs);
-        rc = chsend(stats_ch, &rs, sizeof(rs), -1);
-        if(rc != 0) perror("boom() - chsend() failed");
+        if(MakeRequest(url, timeout, &rs) == 0) {
+            rc = chsend(stats_ch, &rs, sizeof(rs), -1);
+            if(rc != 0) perror("Failed to send request stats");
+        }
     }
     /* clean up and signal done */
     int done = 1;
@@ -183,8 +184,10 @@ coroutine void stats(int stats_ch, int stop_ch)
             total += rs.tm;
         }
     }
-    /* Display stats and signal done */
-    printf("Avg response time for %d requests: %d ms\n", nrequests, total/nrequests);
+    if(nrequests > 0)
+        /* Display stats and signal done */
+        printf("Avg response time for %d requests: %d ms\n", nrequests, total/nrequests);
+
     /* signal done to main */
     rc = chsend(stop_ch, &stop, sizeof(stop), -1);
     if(rc != 0) perror("stats() - chsend() failed");
