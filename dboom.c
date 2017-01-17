@@ -175,11 +175,11 @@ coroutine void stats(int stats_ch, int stop_ch)
     while(stop == 0) {
         rc = choose(clauses, 2, -1);
         if(rc < 0) {
-            perror("stats() - choose() failed");
+            perror("Could not read from stop or stats channel");
             break;
         }
         if(rc == 1) {
-            /* Stats for a request available */
+            /* Request stats available */
             nrequests++;
             total += rs.tm;
         }
