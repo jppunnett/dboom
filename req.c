@@ -23,6 +23,7 @@ MakeRequest(const char* url, int timeout, struct reqstats *rsp)
     int rc = 0;
 
     assert(rsp->tm == 0);
+    assert(rsp->http_code == 0);
 
     /* Must pass something to dropDataCallback */
     int dummy = 0;

@@ -17,6 +17,7 @@ static unsigned int getRequests(const char*);
 static unsigned int getConcurrentReqs(const char*);
 static int getTimeout(const char*);
 static void usage();
+static struct reqstats reqstats_new();
 
 coroutine void boom(const char*, unsigned int, int, int, int);
 coroutine void stats(int, int, int);
@@ -151,7 +152,7 @@ coroutine void boom(const char* url, unsigned int nreqs, int timeout,
     int rc = 0;
     /* Send requests until no more requests */
     for(int i = nreqs; i > 0; --i) {
-        struct reqstats rs;
+        struct reqstats rs = reqstats_new();
         if(MakeRequest(url, timeout, &rs) == 0) {
             rc = chsend(stats_ch, &rs, sizeof(rs), -1);
             if(rc != 0) perror("Failed to send request stats");
@@ -197,6 +198,16 @@ coroutine void stats(int stats_ch, int stop_ch, int verbose)
     /* signal done to main */
     rc = chsend(stop_ch, &stop, sizeof(stop), -1);
     if(rc != 0) perror("stats() - chsend() failed");
+}
+
+/* Create and initialize a new reqstat struct */
+static struct reqstats
+reqstats_new()
+{
+    struct reqstats rs;
+    rs.tm = 0;
+    rs.http_code = 0;
+    return rs;
 }
 
 static
