@@ -19,16 +19,17 @@ static int getTimeout(const char*);
 static void usage();
 
 coroutine void boom(const char*, unsigned int, int, int, int);
-coroutine void stats(int, int);
+coroutine void stats(int, int, int);
 
 int main(int argc, char **argv) {
 
     char *requests = NULL;
     char *concurr = NULL;
     char *timeout = NULL;
+    int verbose = 0;
 
     int c;
-    while((c = getopt(argc, argv, "n:c:t:")) != -1) {
+    while((c = getopt(argc, argv, "n:c:t:v")) != -1) {
         switch(c) {
         case 'n':
             requests = optarg;
@@ -38,6 +39,9 @@ int main(int argc, char **argv) {
             break;
         case 't':
             timeout = optarg;
+            break;
+        case 'v':
+            verbose = 1;
             break;
         default:
             usage();
@@ -90,7 +94,7 @@ int main(int argc, char **argv) {
     }
     /* Launch coroutine for recording statistics */
     int stats_cor = 0;
-    stats_cor = go(stats(stats_ch, stop_ch));
+    stats_cor = go(stats(stats_ch, stop_ch, verbose));
     if(stats_cor < 0) {
         perror("Could not start stats coroutine");
         exit(EXIT_FAILURE);
@@ -159,7 +163,7 @@ coroutine void boom(const char* url, unsigned int nreqs, int timeout,
     if(rc != 0) perror("boom() - chsend() failed");
 }
 
-coroutine void stats(int stats_ch, int stop_ch)
+coroutine void stats(int stats_ch, int stop_ch, int verbose)
 {
     int rc = 0;
     int nrequests = 0;
@@ -182,6 +186,8 @@ coroutine void stats(int stats_ch, int stop_ch)
             /* Request stats available */
             nrequests++;
             total += rs.tm;
+            if(verbose)
+                printf("%d,%ld\n", rs.http_code, rs.tm);
         }
     }
     if(nrequests > 0)
