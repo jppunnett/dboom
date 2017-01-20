@@ -21,7 +21,7 @@ MakeRequest(const char* url, int timeout, struct reqstats *rsp)
        I.e once per request? I doubt it... */
 
     int rc = 0;
-
+    assert(timeout >= 0);
     assert(rsp->tm == 0);
     assert(rsp->http_code == 0);
 
@@ -42,6 +42,9 @@ MakeRequest(const char* url, int timeout, struct reqstats *rsp)
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&dummy);
         /* Be a friendly Web citizen and declare who is making the request */
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "dboom/1.0");
+        /* CURL request timeout in seconds */
+        if(timeout > 0)
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, timeout);
         /* Perform the request, res will get the return code */
         res = curl_easy_perform(curl);
         if(res != CURLE_OK) {
