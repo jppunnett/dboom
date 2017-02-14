@@ -14,9 +14,10 @@ I would have loved to have used dsock, but it's not quite ready for prime time.
 
 	Options:
 
-		-n   Number of requests to send to <url>. Default is 200.
-		-c   Number of concurrent requests. Default is 50.
-		-TBD More to come...
+		-n nreqs    Number of requests to send to <url>. Default is 200.
+		-c nconcurr Number of concurrent requests. Default is 50.
+		-t timeout  Number of milliseconds to wait until timing out.
+		            Default is 0, never time out.
 
 ## Design Notes
 
