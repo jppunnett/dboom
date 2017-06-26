@@ -48,8 +48,7 @@ MakeRequest(const char* url, int timeout, struct reqstats *rsp)
         /* Perform the request, res will get the return code */
         res = curl_easy_perform(curl);
         if(res != CURLE_OK) {
-            fprintf(stderr, "curl_easy_perform() failed: %s\n",
-                curl_easy_strerror(res));
+            fprintf(stderr, "%s\n", curl_easy_strerror(res));
             rc = -1;
         } else {
             long http_code = 0;
