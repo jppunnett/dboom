@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <time.h>
 
 #include "dboom.h"
 #include "req.h"
@@ -93,6 +94,10 @@ int main(int argc, char **argv) {
         perror("Could not create channel");
         exit(EXIT_FAILURE);
     }
+    /* Record start time */
+    time_t start_t, end_t;
+    time(&start_t);
+
     /* Launch coroutine for recording statistics */
     int stats_cor = 0;
     stats_cor = go(stats(stats_ch, stop_ch, verbose));
@@ -143,6 +148,10 @@ int main(int argc, char **argv) {
     if(hclose(stop_ch)) perror("Could not close stop_ch");
     /* Memory for coroutine array */
     free(pcoh);
+
+    /* Print run time */
+    time(&end_t);
+    printf("Run time: %fs\n", difftime(end_t, start_t));
     
     exit(EXIT_SUCCESS);
 }
