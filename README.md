@@ -24,3 +24,9 @@ I would have loved to have used dsock, but it's not quite ready for prime time.
 - Each concurrent request is a coroutine
 - Stats coroutine to collect statistics
 - Should take advantage of multiple cores
+
+## TODO
+- review how invoking curl. Can be more efficient?
+- update Makefile to use += on CFLAGS and others
+- Use Travis
+- Update to use latest version of libdill.
