@@ -20,8 +20,8 @@ static int getTimeout(const char*);
 static void usage();
 static struct reqstats reqstats_new();
 
-coroutine void boom(const char*, unsigned int, int, int, int);
-coroutine void stats(int, int, int);
+coroutine void boom(const char*, unsigned int, int, int[2]);
+coroutine void stats(int[2], int[2], int);
 
 int main(int argc, char **argv) {
 
@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
     char *concurr = NULL;
     char *timeout = NULL;
     int verbose = 0;
-
+    
     int c;
     while((c = getopt(argc, argv, "n:c:t:v")) != -1) {
         switch(c) {
@@ -53,8 +53,10 @@ int main(int argc, char **argv) {
 
     /* Exit if no url provided */
     if(optind == argc) usage();
-    /* TODO: Accept > 1 URL */
+
+    /* Grab URL. TODO: Accept > 1 URL */
     const char* url = argv[optind];
+
     /* Validate program args */
     unsigned int nreqs = getRequests(requests);
     unsigned int nconcurr = getConcurrentReqs(concurr);
@@ -66,6 +68,7 @@ int main(int argc, char **argv) {
              nreqs, nconcurr);
         exit(EXIT_FAILURE);
     }
+
     /* The number of requests cannot be less than the number of concurrent
        requests. */
     if(nreqs < nconcurr) {
@@ -81,74 +84,78 @@ int main(int argc, char **argv) {
         Concurrent Requests: %d\n\
         Timeout: %d ms\n", url, nreqs, nconcurr, ntimeout);
     
+    int rc = 0;
+
     /* Each boom() coroutine writes to this channel when done. This allows 
        main() to wait for all boom() coroutines to complete before exiting. */
-    int done_ch = chmake(sizeof(int));
-    /* Each boom() coroutine uses this channel to record statistics. */
-    int stats_ch = chmake(sizeof(struct reqstats));
-    /* stats() coroutine and main() uses this channel to control stats
-       cleanup and shutdown. */
-    int stop_ch = chmake(sizeof(int));
-
-    if(done_ch < 0 || stats_ch < 0 || stop_ch < 0) {
-        perror("Could not create channel");
+    int done_ch[2];
+    rc = chmake(done_ch);
+    if(rc != 0) {
+        perror("Failed to make done channel");
         exit(EXIT_FAILURE);
     }
+
+    /* Each boom() coroutine uses this channel to record statistics. */
+    int stats_ch[2];
+    rc = chmake(stats_ch);
+    if(rc != 0) {
+        perror("Failed to make stats channel");
+        exit(EXIT_FAILURE);
+    }
+
+    /* stats() coroutine and main() uses this channel to control stats
+       cleanup and shutdown. */
+    int stop_ch[2];
+    rc = chmake(stop_ch);
+    if(rc != 0) {
+        perror("Failed to make stop channel");
+        exit(EXIT_FAILURE);
+    }
+
     /* Record start time */
     time_t start_t, end_t;
     time(&start_t);
 
+    int bun = 0;
+
     /* Launch coroutine for recording statistics */
-    int stats_cor = 0;
-    stats_cor = go(stats(stats_ch, stop_ch, verbose));
-    if(stats_cor < 0) {
+    bun = go(stats(stats_ch, stop_ch, verbose));
+    if(bun < 0) {
         perror("Could not start stats coroutine");
         exit(EXIT_FAILURE);
     }
+
     /* Launch nconcurr coroutines, each one sending nreqs/nconcurr requests. */
-    int *pcoh = malloc(nconcurr * sizeof(int));
-    if(pcoh == NULL) {
-        perror("Could not allocate memory for coroutine handles");
+    bun = bundle();
+    if(bun < 0) {
+        perror("Could not create bundle for boom coroutins.");
         exit(EXIT_FAILURE);
     }
-    for(int i = 0; i < nconcurr; ++i) {
-        pcoh[i] = go(boom(url, nreqs/nconcurr, ntimeout, done_ch, stats_ch));
-        if(pcoh[i] < 0) {
-            perror("Could not launch coroutine");
-            exit(EXIT_FAILURE);
-        }
-    }
-    /* Wait for boom() coroutines to end */
-    int rc = 0;
-    int done = 0;
-    for(int i = nconcurr; i > 0; --i) {
-        rc = chrecv(done_ch, &done, sizeof(done), -1);
+
+    int i;
+    for(i = 0; i < nconcurr; ++i) {
+        rc = bundle_go(bun, boom(url, nreqs/nconcurr, ntimeout, stats_ch));
         if(rc != 0) {
-            perror("Could not receive on done_ch");
+            perror("Could not launch boom coroutine");
             exit(EXIT_FAILURE);
         }
     }
-    /* Tell stats coroutine to end */
-    int stop = 1;
-    rc = chsend(stop_ch, &stop, sizeof(stop), -1);
-    if(rc != 0) perror("Failed to send on stop_ch");
+
+    /* Wait for boom() coroutines to end */
+    rc = bundle_wait(bun, -1);
+    if(rc != 0) {
+        perror("Failed when waiting for boom coroutins to complete");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Close stats channel, causing the stats coroutine to end */
+    rc = chdone(stats_ch);
+    if(rc != 0) perror("Failed to close stats channel");
+
     /* Wait for stats to end */
-    rc = chrecv(stop_ch, &stop, sizeof(stop), -1);
-    if(rc != 0) perror("Failed to receive on stop_ch");
+    rc = bundle_wait(stats_bun, -1);
+    if(rc != 0) perror("Failed while waiting for stats coroutine to end");
     
-    /* Clean up resources */
-
-    /* Coroutines */
-    for(int i = 0; i < nconcurr; ++i)
-        if(hclose(pcoh[i])) perror("Could not close boom coroutine");
-    if(hclose(stats_cor)) perror("Could not close stats coroutine");
-    /* Channels */    
-    if(hclose(done_ch)) perror("Could not close done_ch");
-    if(hclose(stats_ch)) perror("Could not close stats_ch");
-    if(hclose(stop_ch)) perror("Could not close stop_ch");
-    /* Memory for coroutine array */
-    free(pcoh);
-
     /* Print run time */
     time(&end_t);
     printf("Run time: %fs\n", difftime(end_t, start_t));
@@ -157,23 +164,20 @@ int main(int argc, char **argv) {
 }
 
 coroutine void boom(const char* url, unsigned int nreqs, int timeout,
-                    int done_ch, int stats_ch) {
+                    int stats_ch[2]) {
     int rc = 0;
     /* Send requests until no more requests */
-    for(int i = nreqs; i > 0; --i) {
+    int i;
+    for(i = nreqs; i > 0; --i) {
         struct reqstats rs = reqstats_new();
         if(MakeRequest(url, timeout, &rs) == 0) {
-            rc = chsend(stats_ch, &rs, sizeof(rs), -1);
+            rc = chsend(stats_ch[1], &rs, sizeof(rs), -1);
             if(rc != 0) perror("Failed to send request stats");
         }
     }
-    /* clean up and signal done */
-    int done = 1;
-    rc = chsend(done_ch, &done, sizeof(done), -1);
-    if(rc != 0) perror("boom() - chsend() failed");
 }
 
-coroutine void stats(int stats_ch, int stop_ch, int verbose)
+coroutine void stats(int stats_ch[2], int stop_ch[2], int verbose)
 {
     int rc = 0;
     int nrequests = 0;
@@ -182,16 +186,18 @@ coroutine void stats(int stats_ch, int stop_ch, int verbose)
     unsigned int total = 0;
 
     struct chclause clauses[] = {
-        {CHRECV, stop_ch, &stop, sizeof(stop)},
-        {CHRECV, stats_ch, &rs, sizeof(rs)}
+        {CHRECV, stop_ch[0], &stop, sizeof(stop)},
+        {CHRECV, stats_ch[0], &rs, sizeof(rs)}
     };
     
+    int ci = 0;
     while(stop == 0) {
-        rc = choose(clauses, 2, -1);
-        if(rc < 0) {
+        ci = choose(clauses, 2, -1);
+        if(ci < 0) {
             perror("Could not read from stop or stats channel");
             break;
         }
+
         if(rc == 1) {
             /* Request stats available */
             nrequests++;
@@ -200,12 +206,13 @@ coroutine void stats(int stats_ch, int stop_ch, int verbose)
                 printf("%d,%ld\n", rs.http_code, rs.tm);
         }
     }
+
     if(nrequests > 0)
-        /* Display stats and signal done */
+        /* Display stats if we have something to display */
         printf("Avg response time for %d requests: %d ms\n", nrequests, total/nrequests);
 
     /* signal done to main */
-    rc = chsend(stop_ch, &stop, sizeof(stop), -1);
+    rc = chsend(stop_ch[1], &stop, sizeof(stop), -1);
     if(rc != 0) perror("stats() - chsend() failed");
 }
 
