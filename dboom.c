@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
     }
 
     /* Close stats channel, causing the stats coroutine to end */
-    rc = chdone(stats_ch);
+    rc = chdone(stats_ch[1]);
     if(rc != 0) {
         perror("Failed to close stats channel");
         exit(EXIT_FAILURE);
@@ -155,7 +155,10 @@ coroutine void boom(const char* url, unsigned int nreqs, int timeout,
         struct reqstats rs = reqstats_new();
         if(MakeRequest(url, timeout, &rs) == 0) {
             rc = chsend(stats_ch[1], &rs, sizeof(rs), -1);
-            if(rc != 0) perror("Failed to send request stats");
+            if(rc != 0) {
+                perror("Failed to send request stats");
+                return;
+            }
         }
     }
 }
@@ -168,7 +171,7 @@ coroutine void stats(int stats_ch[2], int verbose)
     unsigned int total = 0;
 
     while(1) {
-        rc = chrecv(stats_ch[1], &rs, sizeof(rs), -1);
+        rc = chrecv(stats_ch[0], &rs, sizeof(rs), -1);
         if(rc != 0) {
             if(errno != EPIPE) {
                 /* We expect to get EPIPE when main closes stats channel */
