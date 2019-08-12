@@ -18,15 +18,17 @@ I would have loved to have used dsock, but it's not quite ready for prime time.
 		-c nconcurr Number of concurrent requests. Default is 50.
 		-t timeout  Number of milliseconds to wait until timing out.
 		            Default is 0, never time out.
+		-v verbose  Output each request's statistics.
 
 ## Design Notes
 
 - Each concurrent request is a coroutine
 - Stats coroutine to collect statistics
 - Should take advantage of multiple cores
+- dboom now works with libdill 2.14
 
 ## TODO
 - review how invoking curl. Can be more efficient?
+- replace curl with libdill sockets
 - update Makefile to use += on CFLAGS and others
 - Use Travis
-- Update to use latest version of libdill.
