@@ -3,7 +3,7 @@ Boom using libdill and libcurl C libraries.
 
 A C version of "hey" (https://github.com/rakyll/hey) using the excellent:
 
-- libdill (https://github.com/sustrik/libdill) and
+- libdill v2.14 (https://github.com/sustrik/libdill) and
 - libcurl (https://curl.haxx.se/libcurl)
 
 I would have loved to have used dsock, but it's not quite ready for prime time.
@@ -20,15 +20,8 @@ I would have loved to have used dsock, but it's not quite ready for prime time.
 		            Default is 0, never time out.
 		-v verbose  Output each request's statistics.
 
-## Design Notes
-
-- Each concurrent request is a coroutine
-- Stats coroutine to collect statistics
-- Should take advantage of multiple cores
-- dboom now works with libdill 2.14
-
 ## TODO
-- review how invoking curl. Can be more efficient?
 - replace curl with libdill sockets
-- update Makefile to use += on CFLAGS and others
 - Use Travis
+- Handle more than one URL
+- Take advantage of multiple cores
