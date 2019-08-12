@@ -207,7 +207,9 @@ reqstats_new()
 static
 void usage()
 {
-    fprintf(stderr, "Usage: dboom [-n nreqs] [-c nconcurr] [-t timeoutms] URL.\n");
+    fprintf(stderr, "Usage:\n\tdboom [-n nreqs] [-c nconcurr] [-t timeoutms] [-v] URL.\n");
+    fprintf(stderr, "\t  -v,\tOutput each request's stats.\n");
+
     exit(EXIT_FAILURE);
 }
 
