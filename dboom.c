@@ -9,6 +9,7 @@
 
 #include "dboom.h"
 #include "req.h"
+#include "url.h"
 
 #define DEFAULT_REQUESTS    10
 #define DEFAULT_CONCURR     5
@@ -29,8 +30,10 @@ int main(int argc, char **argv) {
     char *concurr = NULL;
     char *timeout = NULL;
     int verbose = 0;
-    
+    int rc = 0;
+    struct url_parts parts;
     int c;
+
     while((c = getopt(argc, argv, "n:c:t:v")) != -1) {
         switch(c) {
         case 'n':
@@ -56,6 +59,13 @@ int main(int argc, char **argv) {
 
     /* Grab URL. TODO: Accept > 1 URL */
     const char* url = argv[optind];
+
+    /* Parse URL */
+    rc = parse_url(url, &parts);
+    if(rc != 0) {
+        fprintf(stderr, "Problem parsing URL: %s\n", url);
+        exit(EXIT_FAILURE);
+    }
 
     /* Validate program args */
     unsigned int nreqs = getRequests(requests);
@@ -87,8 +97,6 @@ int main(int argc, char **argv) {
     /* Record start time */
     time_t start_t, end_t;
     time(&start_t);
-
-    int rc = 0;
 
     /* Each boom() coroutine uses this channel to record statistics. */
     int stats_ch[2];
