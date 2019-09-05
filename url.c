@@ -20,16 +20,17 @@ parse_url(const char* url) {
     assert(url);
     
     char *pch = NULL;
+    char *temp_pch = NULL;
     int len = 0;
     int i = 0;
-    int valid_scheme = 0;
+    int valid_scheme = 1;
     struct parsed_url* purl = NULL;
 
     purl = calloc(1, sizeof(struct parsed_url));
     check_mem(purl);
 
     /* Extract scheme */
-    pch = strchr(url, ':');
+    pch = strstr(url, "://");
     /* Scheme marker not found */
     check(pch != NULL, "No scheme marker. Looks like invalid URL.");
     len = pch - url;
@@ -47,13 +48,43 @@ parse_url(const char* url) {
     /* We want http or https. Anything else (e.g. ftp) we consider it an
      * error.
      */
-    valid_scheme =
-        (strcmp("https", purl->scheme) == 0)
-        || (strcmp("http", purl->scheme) == 0);
+    valid_scheme = 1;
+    if(strcmp("https", purl->scheme) == 0) {
+        purl->port = 443;
+    }
+    else if(strcmp("http", purl->scheme) == 0) {
+        purl->port = 80;
+    }
+    else {
+        valid_scheme = 0;
+    }
     check(valid_scheme, "Only interested in HTTP/S. Scheme is '%s'", purl->scheme);
 
+    /* Extract host name */
+    /* pch pointing to scheme marker so advance to host or end of url */
+    pch += 3;
+    temp_pch = pch;
+    while(*temp_pch != '\0') {
+        if(*temp_pch == '/') break;
+        if(*temp_pch == ':') break;
+        temp_pch++;
+    }
+    len = temp_pch - pch;
+    check(len != 0, "No host specified.");
+    /* Store the host name */
+    assert(purl->host == NULL && "Expect purl->host to be NULL.");
+    purl->host = calloc(len + 1, sizeof(char));
+    check_mem(purl->host != NULL);
+    strncpy(purl->host, pch, len);
+    purl->host[len] = '\0';
+    assert(strlen(purl->host) == len);
+    debug("purl->host = %s", purl->host);
+
     /* Extract port */
-    /* Extract host */
+    if(*temp_pch == ':') {
+        debug("We have a port");
+    }
+
     /* Extract resource */
 
     return purl;
