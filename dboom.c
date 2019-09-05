@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
     char *timeout = NULL;
     int verbose = 0;
     int rc = 0;
-    struct url_parts parts;
+    struct parsed_url *purl;
     int c;
 
     while((c = getopt(argc, argv, "n:c:t:v")) != -1) {
@@ -61,8 +61,8 @@ int main(int argc, char **argv) {
     const char* url = argv[optind];
 
     /* Parse URL */
-    rc = parse_url(url, &parts);
-    if(rc != 0) {
+    purl = parse_url(url);
+    if(purl == NULL) {
         fprintf(stderr, "Problem parsing URL: %s\n", url);
         exit(EXIT_FAILURE);
     }
@@ -150,6 +150,8 @@ int main(int argc, char **argv) {
     /* Print run time */
     time(&end_t);
     printf("Run time: %fs\n", difftime(end_t, start_t));
+
+    parse_url_free(purl);
     
     exit(EXIT_SUCCESS);
 }
