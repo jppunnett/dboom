@@ -4,7 +4,7 @@
 #ifndef DBOOM_URL_INCLUDED
 #define DBOOM_URL_INCLUDED
 
-struct url_parts {
+struct parsed_url {
     char *scheme;
     char *host;
     int  port;
@@ -14,9 +14,13 @@ struct url_parts {
 
 
 /* parse_url: parses a URL string into its parts.
- * Returns 0 if successful, otherwise returns -1.
+ * Returns a pointer to a parsed_url if successful, otherwise returns NULL.
+ * The caller must call parse_url_free() once done with the parsed_url.
  */
+struct parsed_url* parse_url(const char *url);
 
-int parse_url(const char *url, struct url_parts *parts);
+/* parse_url_free: cleans up all resouces for a parsed_url.
+ */
+void parse_url_free(struct parsed_url* purl);
 
 #endif
