@@ -8,7 +8,9 @@ struct parsed_url {
     char *scheme;
     char *host;
     int  port;
-    char *resource;
+    char *path;
+    char *query;
+    char *fragment;
 };
 
 
