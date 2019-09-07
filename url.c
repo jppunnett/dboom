@@ -44,7 +44,7 @@ parse_url(const char* url) {
     purl->scheme = calloc(len + 1, sizeof(char));
     check_mem(purl->scheme != NULL);
     strncpy(purl->scheme, url, len);
-    purl->scheme[len] = '\0';
+    assert(purl->scheme[len] == '\0');
     assert(strlen(purl->scheme) == len);
     /* Convert scheme to lowercase to ease comparison */
     for(i = 0; i < len; ++i)
@@ -63,6 +63,7 @@ parse_url(const char* url) {
         valid_scheme = 0;
     }
     check(valid_scheme, "Only interested in HTTP/S. Scheme is '%s'", purl->scheme);
+    debug("purl->scheme = %s", purl->scheme);
 
     /* Extract host name */
     /* pch pointing to scheme marker so advance to start of host. */
@@ -80,7 +81,7 @@ parse_url(const char* url) {
     purl->host = calloc(len + 1, sizeof(char));
     check_mem(purl->host != NULL);
     strncpy(purl->host, pch, len);
-    purl->host[len] = '\0';
+    assert(purl->host[len] == '\0');
     assert(strlen(purl->host) == len);
     debug("purl->host = %s", purl->host);
 
@@ -88,7 +89,7 @@ parse_url(const char* url) {
     if(*temp_pch == ':') {
         temp_pch++;
         pch = temp_pch;
-        /* Advance to start of resource */
+        /* Advance to start of resource to figure out where port ends */
         while(*temp_pch != '\0') {
             if(*temp_pch == '/') break;
             check(isdigit(*temp_pch), "Invalid port character.");
@@ -96,22 +97,41 @@ parse_url(const char* url) {
         }
         len = temp_pch - pch;
         check(len != 0, "No port specified.");
+        check(len < 6, "Port too big: %d", len);
         /* Save the port and convert to integer */
         buf = calloc(len + 1, sizeof(char));
         check_mem(buf != NULL);
         strncpy(buf, pch, len);
-        assert(buf[len] == '\0' && "Expect calloc to zero memory.");
+        assert(buf[len] == '\0');
         assert(strlen(buf) == len);
-        debug("buf = %s", buf);
-        check(sscanf(buf, "%d", &purl->port) == 1, "Failed to convery port to int");
+        check(sscanf(buf, "%d", &purl->port) == 1, "Failed to convert port to int");
+        free(buf);
     }
+    debug("purl->port: %d", purl->port);
 
-    /* Extract resource */
+    /* Extract path */
+    if(*temp_pch == '/') {
+        /* Tired of writing this parsing code. Need to test libdill now.
+         * We have enough to test libdill sockets at this point--for certain
+         * URLs, anyway :)
+         *
+         * Grab everthing to end of url and treat as path--for now, anyway.
+         */
+        len = strlen(temp_pch);
+        assert(len > 0);
+        purl->path = calloc(len + 1, sizeof(char));
+        check_mem(purl->path != NULL);
+        strncpy(purl->path, temp_pch, len);
+        assert(purl->path[len] == '\0');
+        assert(strlen(purl->path) == len);
+    }
+    debug("purl->path: %s", purl->path);
 
     return purl;
 
 error:
     if(purl) parse_url_free(purl);
+    if(buf) free(buf);
     return NULL;
 }
 
@@ -119,7 +139,11 @@ error:
 void
 parse_url_free(struct parsed_url* purl) {
     
-    assert(purl != NULL);
-    if(purl->scheme) free(purl->scheme);
+    assert(purl);
+    if(purl->scheme)    free(purl->scheme);
+    if(purl->host)      free(purl->host);
+    if(purl->path)      free(purl->path);
+    if(purl->query)     free(purl->query);
+    if(purl->fragment)  free(purl->fragment);
 }
 
