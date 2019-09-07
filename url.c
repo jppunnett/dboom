@@ -1,5 +1,8 @@
 /* url.c
  * Contains functions for working with URLs
+ * Did not write these functions for reuse outside of dboom. E.g. parse_url
+ * does not care about anything but HTTP/S protocol. Also does not honor
+ * user and password in URL.
  */
 #include <assert.h>
 #include <string.h>
@@ -14,13 +17,14 @@
      * scheme://host:port/resource/
      */
 
-
+/* Inspired by http://draft.scyphus.co.jp/lang/c/url_parser.html */
 struct parsed_url*
 parse_url(const char* url) {
     assert(url);
     
     char *pch = NULL;
     char *temp_pch = NULL;
+    char *buf = NULL;
     int len = 0;
     int i = 0;
     int valid_scheme = 1;
@@ -46,7 +50,7 @@ parse_url(const char* url) {
     for(i = 0; i < len; ++i)
         purl->scheme[i] = tolower(purl->scheme[i]); 
     /* We want http or https. Anything else (e.g. ftp) we consider it an
-     * error.
+     * error. Set port to standard HTTP or HTTPS at same time.
      */
     valid_scheme = 1;
     if(strcmp("https", purl->scheme) == 0) {
@@ -61,7 +65,7 @@ parse_url(const char* url) {
     check(valid_scheme, "Only interested in HTTP/S. Scheme is '%s'", purl->scheme);
 
     /* Extract host name */
-    /* pch pointing to scheme marker so advance to host or end of url */
+    /* pch pointing to scheme marker so advance to start of host. */
     pch += 3;
     temp_pch = pch;
     while(*temp_pch != '\0') {
@@ -82,7 +86,24 @@ parse_url(const char* url) {
 
     /* Extract port */
     if(*temp_pch == ':') {
-        debug("We have a port");
+        temp_pch++;
+        pch = temp_pch;
+        /* Advance to start of resource */
+        while(*temp_pch != '\0') {
+            if(*temp_pch == '/') break;
+            check(isdigit(*temp_pch), "Invalid port character.");
+            temp_pch++;
+        }
+        len = temp_pch - pch;
+        check(len != 0, "No port specified.");
+        /* Save the port and convert to integer */
+        buf = calloc(len + 1, sizeof(char));
+        check_mem(buf != NULL);
+        strncpy(buf, pch, len);
+        assert(buf[len] == '\0' && "Expect calloc to zero memory.");
+        assert(strlen(buf) == len);
+        debug("buf = %s", buf);
+        check(sscanf(buf, "%d", &purl->port) == 1, "Failed to convery port to int");
     }
 
     /* Extract resource */
