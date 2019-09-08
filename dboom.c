@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <time.h>
+#include <assert.h>
 
 #include "dboom.h"
 #include "req.h"
@@ -87,6 +88,23 @@ int main(int argc, char **argv) {
              "concurrent requests (%d)\n", nreqs, nconcurr);
         exit(EXIT_FAILURE);
     }
+
+    /* Verify host exists before wasting time sending requests */
+    assert(purl->host);
+    assert(purl->port != 0);
+    int sock = happyeyeballs_connect(purl->host, purl->port, now() + 5000);
+    if(sock == -1) {
+        fprintf(stderr,
+            "Could not connect to host, %s:%d\n", purl->host, purl->port);
+        exit(EXIT_FAILURE);
+    }
+    rc = tcp_close(sock, now() + 1000);
+    if(rc != 0) {
+        fprintf(stderr,
+            "Could close connection to host, %s:%d\n", purl->host, purl->port);
+        exit(EXIT_FAILURE);
+    }
+
 
     printf("Running dboom\n\
         Url: %s\n\
