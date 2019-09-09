@@ -11,6 +11,7 @@
 #include "dboom.h"
 #include "req.h"
 #include "url.h"
+#include "dbg.h"
 
 #define DEFAULT_REQUESTS    10
 #define DEFAULT_CONCURR     5
@@ -26,20 +27,64 @@ reqstats_new()
     return rs;
 }
 
-coroutine void boom(const char* url, unsigned int nreqs, int timeout,
+coroutine void boom(struct parsed_url *purl, const char *url, unsigned int nreqs, int timeout,
                     int stats_ch[2]) {
+    assert(purl);
+    assert(purl->host);
+    assert(purl->port != 0);
+
     int rc = 0;
-    /* Send requests until no more requests */
+    int sock = -1;
     int i;
+
+    /* Set up the http/s connection */
+    sock = happyeyeballs_connect(purl->host, purl->port, now() + 2000);
+    check(sock >= 0, "Could not connect to host, %s:%d",
+            purl->host, purl->port);
+    /* Layer TLS is using HTTPS */
+    if(strcmp(purl->scheme, "https") == 0) {
+        sock = tls_attach_client(sock, now() + 1000);
+        check(sock >= 0, "Could not attach tls protocol.");
+    }
+    /* Now for HTTP protocol */
+    sock = http_attach(sock);
+    check(sock >= 0, "Could not attach HTTP protocol.");
+
+
+    /* Send requests */
     for(i = nreqs; i > 0; --i) {
         struct reqstats rs = reqstats_new();
         if(MakeRequest(url, timeout, &rs) == 0) {
             rc = chsend(stats_ch[1], &rs, sizeof(rs), -1);
-            if(rc != 0) {
-                perror("Failed to send request stats");
+            check(rc != 0, "Failed to send request stats");
+        }
+    }
+
+    /* Fall through */
+
+error:
+    if(sock >= 0) {
+        sock = http_detach(sock, now() + 1000);
+        if(sock < 0) {
+            perror("Could not detach http protocol.");
+            return;
+        }
+        while(1) {
+            unsigned char c;
+            rc = brecv(sock, &c, 1, now() + 1000);
+            if(rc == -1 && ((errno == EPIPE) || (ECONNRESET))) break;
+        }
+        if(strcmp(purl->scheme, "https") == 0) {
+            sock = tls_detach(sock, now() + 1000);
+            if(sock < 0) {
+                perror("Could not detach tls protocol.");
                 return;
             }
         }
+        rc = tcp_close(sock, now() + 1000);
+        if(rc != 0)
+            perror("Error closing TCP connection.");
+
     }
 }
 
@@ -166,23 +211,6 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    /* Verify host exists before wasting time sending requests */
-    assert(purl->host);
-    assert(purl->port != 0);
-    int sock = happyeyeballs_connect(purl->host, purl->port, now() + 5000);
-    if(sock == -1) {
-        fprintf(stderr,
-            "Could not connect to host, %s:%d\n", purl->host, purl->port);
-        exit(EXIT_FAILURE);
-    }
-    rc = tcp_close(sock, now() + 1000);
-    if(rc != 0) {
-        fprintf(stderr,
-            "Could close connection to host, %s:%d\n", purl->host, purl->port);
-        exit(EXIT_FAILURE);
-    }
-
-
     printf("Running dboom\n\
         Url: %s\n\
         Total Requests: %d\n\
@@ -217,7 +245,7 @@ int main(int argc, char **argv) {
 
     int i;
     for(i = 0; i < nconcurr; ++i) {
-        rc = bundle_go(boom_bun, boom(url, nreqs/nconcurr, ntimeout, stats_ch));
+        rc = bundle_go(boom_bun, boom(purl, url, nreqs/nconcurr, ntimeout, stats_ch));
         if(rc != 0) {
             perror("Could not launch boom coroutine");
             exit(EXIT_FAILURE);
