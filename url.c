@@ -13,11 +13,8 @@
 #include "dbg.h"
 #include "url.h"
 
-    /* 
-     * scheme://host:port/resource/
-     */
-
 /* Inspired by http://draft.scyphus.co.jp/lang/c/url_parser.html */
+
 struct parsed_url*
 parse_url(const char* url) {
     assert(url);

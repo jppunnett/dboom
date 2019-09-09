@@ -3,7 +3,6 @@
  */
 #ifndef DBOOM_URL_INCLUDED
 #define DBOOM_URL_INCLUDED
-
 struct parsed_url {
     char *scheme;
     char *host;
@@ -12,6 +11,7 @@ struct parsed_url {
     char *query;
     char *fragment;
 };
+
 
 
 

@@ -3,8 +3,13 @@
 #define DBOOM_REQ_INCLUDED
 
 /* Forward decl */
-struct reqstats;
 struct parsed_url;
+
+struct reqstats {
+	/* request time in milliseconds */
+	int64_t tm;
+	unsigned int http_code;
+};
 
 /* MakeRequest: issues a GET for the resource pointed to by url
    Returns 0 if got a response from server, otherwise returns -1.
@@ -12,6 +17,11 @@ struct parsed_url;
 */
 int MakeRequest(const char*, int, struct reqstats*);
 
-int MakeRequest2(int sock, struct parsed_url *purl, int timeout, struct reqstats *preqs);
+int make_http_request(int sock, struct parsed_url *purl, int timeout, struct reqstats *preqs);
+
+struct reqstats* reqstats_new();
+
+void reqstats_free(struct reqstats *prs);
+
 #endif
 

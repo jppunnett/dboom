@@ -9,12 +9,6 @@
 #include "dbg.h"
 
 
-struct reqstats {
-	/* request time in milliseconds */
-	int64_t tm;
-	unsigned int http_code;
-};
-
 /* libcurl write function. Drops all data. */
 static size_t
 dropDataCallback(void *contents, size_t size, size_t nmemb, void *userp)
@@ -22,9 +16,23 @@ dropDataCallback(void *contents, size_t size, size_t nmemb, void *userp)
     return size * nmemb;
 }
 
+struct reqstats* reqstats_new() {
+    struct reqstats *prs = NULL;
+    prs = calloc(1, sizeof(struct reqstats));
+    check_mem(prs != NULL);
+    return prs;
+
+error:
+ return NULL;
+}
+
+void reqstats_free(struct reqstats *prs) {
+    if(prs) free(prs);
+}
+
 int
-MakeRequest2(int http_sock, struct parsed_url *purl, int timeout,
-                struct reqstats *preqs) {
+make_http_request(int http_sock, struct parsed_url *purl, int timeout,
+                    struct reqstats *preqs) {
     
     int rc = 0;
 

@@ -17,16 +17,6 @@
 #define DEFAULT_CONCURR     5
 #define DEFAULT_TIMEOUT     5000    // ms
 
-/* Create and initialize a new reqstat struct */
-static struct reqstats
-reqstats_new()
-{
-    struct reqstats rs;
-    rs.tm = 0;
-    rs.http_code = 0;
-    return rs;
-}
-
 coroutine void boom(struct parsed_url *purl, const char *url, unsigned int nreqs, int timeout,
                     int stats_ch[2]) {
     assert(purl);
@@ -36,6 +26,7 @@ coroutine void boom(struct parsed_url *purl, const char *url, unsigned int nreqs
     int rc = 0;
     int sock = -1;
     int i;
+    struct reqstats *rs = NULL;
 
     /* Set up the http/s connection */
     sock = happyeyeballs_connect(purl->host, purl->port, now() + 2000);
@@ -53,10 +44,12 @@ coroutine void boom(struct parsed_url *purl, const char *url, unsigned int nreqs
 
     /* Send requests */
     for(i = nreqs; i > 0; --i) {
-        struct reqstats rs = reqstats_new();
-        if(MakeRequest2(sock, purl, timeout, &rs) == 0) {
-            rc = chsend(stats_ch[1], &rs, sizeof(rs), -1);
-            check(rc != 0, "Failed to send request stats");
+        rs = reqstats_new();
+        /* stats coroutine responsible for freeing stats */
+        check_mem(rs != NULL);
+        if(make_http_request(sock, purl, timeout, rs) == 0) {
+            rc = chsend(stats_ch[1], rs, sizeof(rs), -1);
+            check(rc == 0, "Failed to send request stats");
         }
     }
 
@@ -64,24 +57,24 @@ coroutine void boom(struct parsed_url *purl, const char *url, unsigned int nreqs
 
 error:
     if(sock >= 0) {
-        sock = http_detach(sock, now() + 1000);
+        sock = http_detach(sock, now() + 5000);
         if(sock < 0) {
             perror("Could not detach http protocol.");
             return;
         }
         while(1) {
             unsigned char c;
-            rc = brecv(sock, &c, 1, now() + 1000);
+            rc = brecv(sock, &c, 1, now() + 5000);
             if(rc == -1 && ((errno == EPIPE) || (ECONNRESET))) break;
         }
         if(strcmp(purl->scheme, "https") == 0) {
-            sock = tls_detach(sock, now() + 1000);
+            sock = tls_detach(sock, now() + 5000);
             if(sock < 0) {
                 perror("Could not detach tls protocol.");
                 return;
             }
         }
-        rc = tcp_close(sock, now() + 1000);
+        rc = tcp_close(sock, now() + 5000);
         if(rc != 0)
             perror("Error closing TCP connection.");
     }
@@ -91,7 +84,7 @@ coroutine void stats(int stats_ch[2], int verbose)
 {
     int rc = 0;
     int nrequests = 0;
-    struct reqstats rs;
+    struct reqstats *rs = NULL;
     unsigned int total = 0;
 
     while(1) {
@@ -107,10 +100,13 @@ coroutine void stats(int stats_ch[2], int verbose)
         }
 
         /* Request stats available */
-        nrequests++;
-        total += rs.tm;
-        if(verbose)
-            printf("%d,%ld\n", rs.http_code, rs.tm);
+        if(rs != NULL) {
+            nrequests++;
+            total += rs->tm;
+            if(verbose)
+                printf("%d,%ld\n", rs->http_code, rs->tm);
+            reqstats_free(rs);
+        }
     }
 
     /* Display stats if we have something to display */
