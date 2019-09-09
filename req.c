@@ -1,10 +1,19 @@
 /* req.c */
 #include <assert.h>
 #include <curl/curl.h>
-/* For now() */
 #include <libdill.h>
+
 #include "req.h"
-#include "dboom.h"
+/* #include "dboom.h" */
+#include "url.h"
+#include "dbg.h"
+
+
+struct reqstats {
+	/* request time in milliseconds */
+	int64_t tm;
+	unsigned int http_code;
+};
 
 /* libcurl write function. Drops all data. */
 static size_t
@@ -13,6 +22,27 @@ dropDataCallback(void *contents, size_t size, size_t nmemb, void *userp)
     return size * nmemb;
 }
 
+int
+MakeRequest2(int http_sock, struct parsed_url *purl, int timeout,
+                struct reqstats *preqs) {
+    
+    int rc = 0;
+
+    check(http_sock >= 0, "Bad HTTP socket. http_sock = %d", http_sock);
+    check(purl != NULL, "purl is NULL.");
+    check(preqs != NULL, "preqs is NULL.");
+    check(timeout >= 0, "Bad timeout value. timeout = %d", timeout);
+    check(preqs->tm == 0, "Expect preqs->tm == 0. preqs->tm");
+    check(preqs->http_code == 0,
+        "Expect preqs->http_code to be zero. preqs->http_code = %d",
+        preqs->http_code);
+
+    return rc;
+
+error:
+
+    return -1;
+}
 
 int
 MakeRequest(const char* url, int timeout, struct reqstats *rsp)

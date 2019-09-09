@@ -4,6 +4,7 @@
 
 /* Forward decl */
 struct reqstats;
+struct parsed_url;
 
 /* MakeRequest: issues a GET for the resource pointed to by url
    Returns 0 if got a response from server, otherwise returns -1.
@@ -11,5 +12,6 @@ struct reqstats;
 */
 int MakeRequest(const char*, int, struct reqstats*);
 
+int MakeRequest2(int sock, struct parsed_url *purl, int timeout, struct reqstats *preqs);
 #endif
 

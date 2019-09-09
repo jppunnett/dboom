@@ -54,7 +54,7 @@ coroutine void boom(struct parsed_url *purl, const char *url, unsigned int nreqs
     /* Send requests */
     for(i = nreqs; i > 0; --i) {
         struct reqstats rs = reqstats_new();
-        if(MakeRequest(url, timeout, &rs) == 0) {
+        if(MakeRequest2(sock, purl, timeout, &rs) == 0) {
             rc = chsend(stats_ch[1], &rs, sizeof(rs), -1);
             check(rc != 0, "Failed to send request stats");
         }
@@ -84,7 +84,6 @@ error:
         rc = tcp_close(sock, now() + 1000);
         if(rc != 0)
             perror("Error closing TCP connection.");
-
     }
 }
 
