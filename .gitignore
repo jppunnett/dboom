@@ -32,3 +32,6 @@ dboom
 # Debug files
 *.dSYM/
 *.su
+
+# vim swap files
+*.swp
