@@ -16,14 +16,91 @@
 #define DEFAULT_CONCURR     5
 #define DEFAULT_TIMEOUT     5000    // ms
 
-static unsigned int getRequests(const char*);
-static unsigned int getConcurrentReqs(const char*);
-static int getTimeout(const char*);
-static void usage();
-static struct reqstats reqstats_new();
+/* Create and initialize a new reqstat struct */
+static struct reqstats
+reqstats_new()
+{
+    struct reqstats rs;
+    rs.tm = 0;
+    rs.http_code = 0;
+    return rs;
+}
 
-coroutine void boom(const char*, unsigned int, int, int[2]);
-coroutine void stats(int[2], int);
+coroutine void boom(const char* url, unsigned int nreqs, int timeout,
+                    int stats_ch[2]) {
+    int rc = 0;
+    /* Send requests until no more requests */
+    int i;
+    for(i = nreqs; i > 0; --i) {
+        struct reqstats rs = reqstats_new();
+        if(MakeRequest(url, timeout, &rs) == 0) {
+            rc = chsend(stats_ch[1], &rs, sizeof(rs), -1);
+            if(rc != 0) {
+                perror("Failed to send request stats");
+                return;
+            }
+        }
+    }
+}
+
+coroutine void stats(int stats_ch[2], int verbose)
+{
+    int rc = 0;
+    int nrequests = 0;
+    struct reqstats rs;
+    unsigned int total = 0;
+
+    while(1) {
+        rc = chrecv(stats_ch[0], &rs, sizeof(rs), -1);
+        if(rc != 0) {
+            if(errno != EPIPE) {
+                /* We expect to get EPIPE when main closes stats channel */
+                perror("Unexpected error reading stats channel");
+            }
+
+            /* Break out for any error */
+            break;
+        }
+
+        /* Request stats available */
+        nrequests++;
+        total += rs.tm;
+        if(verbose)
+            printf("%d,%ld\n", rs.http_code, rs.tm);
+    }
+
+    /* Display stats if we have something to display */
+    if(nrequests > 0)
+        printf("Avg response time for %d requests: %d ms\n", 
+            nrequests, total/nrequests);
+}
+
+static
+void usage()
+{
+    fprintf(stderr, "Usage:\n\tdboom [-n nreqs] [-c nconcurr] [-t timeoutms] [-v] URL.\n");
+    fprintf(stderr, "\t  -v,\tOutput each request's stats.\n");
+
+    exit(EXIT_FAILURE);
+}
+
+static
+unsigned int getRequests(const char *requests)
+{
+    return requests ? atoi(requests) : DEFAULT_REQUESTS;
+}
+
+static
+unsigned int getConcurrentReqs(const char *concurr)
+{
+    return concurr ? atoi(concurr) : DEFAULT_CONCURR;
+}
+
+static
+int getTimeout(const char *timeout)
+{
+    return timeout ? atoi(timeout) : DEFAULT_TIMEOUT;
+}
 
 int main(int argc, char **argv) {
 
@@ -174,87 +251,3 @@ int main(int argc, char **argv) {
     exit(EXIT_SUCCESS);
 }
 
-coroutine void boom(const char* url, unsigned int nreqs, int timeout,
-                    int stats_ch[2]) {
-    int rc = 0;
-    /* Send requests until no more requests */
-    int i;
-    for(i = nreqs; i > 0; --i) {
-        struct reqstats rs = reqstats_new();
-        if(MakeRequest(url, timeout, &rs) == 0) {
-            rc = chsend(stats_ch[1], &rs, sizeof(rs), -1);
-            if(rc != 0) {
-                perror("Failed to send request stats");
-                return;
-            }
-        }
-    }
-}
-
-coroutine void stats(int stats_ch[2], int verbose)
-{
-    int rc = 0;
-    int nrequests = 0;
-    struct reqstats rs;
-    unsigned int total = 0;
-
-    while(1) {
-        rc = chrecv(stats_ch[0], &rs, sizeof(rs), -1);
-        if(rc != 0) {
-            if(errno != EPIPE) {
-                /* We expect to get EPIPE when main closes stats channel */
-                perror("Unexpected error reading stats channel");
-            }
-
-            /* Break out for any error */
-            break;
-        }
-
-        /* Request stats available */
-        nrequests++;
-        total += rs.tm;
-        if(verbose)
-            printf("%d,%ld\n", rs.http_code, rs.tm);
-    }
-
-    /* Display stats if we have something to display */
-    if(nrequests > 0)
-        printf("Avg response time for %d requests: %d ms\n", nrequests, total/nrequests);
-}
-
-/* Create and initialize a new reqstat struct */
-static struct reqstats
-reqstats_new()
-{
-    struct reqstats rs;
-    rs.tm = 0;
-    rs.http_code = 0;
-    return rs;
-}
-
-static
-void usage()
-{
-    fprintf(stderr, "Usage:\n\tdboom [-n nreqs] [-c nconcurr] [-t timeoutms] [-v] URL.\n");
-    fprintf(stderr, "\t  -v,\tOutput each request's stats.\n");
-
-    exit(EXIT_FAILURE);
-}
-
-static
-unsigned int getRequests(const char *requests)
-{
-    return requests ? atoi(requests) : DEFAULT_REQUESTS;
-}
-
-static
-unsigned int getConcurrentReqs(const char *concurr)
-{
-    return concurr ? atoi(concurr) : DEFAULT_CONCURR;
-}
-
-static
-int getTimeout(const char *timeout)
-{
-    return timeout ? atoi(timeout) : DEFAULT_TIMEOUT;
-}
