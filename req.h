@@ -17,7 +17,7 @@ struct reqstats {
 */
 int MakeRequest(const char*, int, struct reqstats*);
 
-int make_http_request(int sock, struct parsed_url *purl, int timeout, struct reqstats *preqs);
+int make_http_request(int sock, struct parsed_url *purl, int timeout, struct reqstats *pstats);
 
 struct reqstats* reqstats_new();
 

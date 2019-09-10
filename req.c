@@ -4,7 +4,6 @@
 #include <libdill.h>
 
 #include "req.h"
-/* #include "dboom.h" */
 #include "url.h"
 #include "dbg.h"
 
@@ -32,18 +31,48 @@ void reqstats_free(struct reqstats *prs) {
 
 int
 make_http_request(int http_sock, struct parsed_url *purl, int timeout,
-                    struct reqstats *preqs) {
+                    struct reqstats *pstats) {
     
     int rc = 0;
 
     check(http_sock >= 0, "Bad HTTP socket. http_sock = %d", http_sock);
     check(purl != NULL, "purl is NULL.");
-    check(preqs != NULL, "preqs is NULL.");
+    check(pstats != NULL, "pstats is NULL.");
     check(timeout >= 0, "Bad timeout value. timeout = %d", timeout);
-    check(preqs->tm == 0, "Expect preqs->tm == 0. preqs->tm");
-    check(preqs->http_code == 0,
-        "Expect preqs->http_code to be zero. preqs->http_code = %d",
-        preqs->http_code);
+    check(pstats->tm == 0, "Expect pstats->tm == 0. pstats->tm");
+    check(pstats->http_code == 0,
+        "Expect pstats->http_code to be zero. pstats->http_code = %d",
+        pstats->http_code);
+    
+    /* Start timing now */
+    int64_t start = now();
+    rc = http_sendrequest(http_sock, "GET", purl->path ? purl->path : "/", -1);
+    check(rc == 0, "Error sending GET request");
+    rc = http_sendfield(http_sock, "Host", purl->host, -1);
+    check(rc == 0, "Error sending Host field");
+    rc = http_sendfield(http_sock, "Connection", "close", -1);
+    check(rc == 0, "Error sending Connection field");
+    rc = http_done(http_sock, -1);
+    check(rc == 0, "Error sending Connection field");
+
+    /* read the http server response. */
+    char reason[256];
+    rc = http_recvstatus(http_sock, reason, sizeof(reason), now() + timeout);
+    check(rc != -1, "Error receiving status");
+    pstats->http_code = rc;
+    while(1) {
+        char name[256];
+        char value[256];
+        rc = http_recvfield(http_sock, name, sizeof(name),
+                value, sizeof(value), -1);
+        if(rc == -1 && ((errno == EPIPE) || (ECONNRESET))) break;
+        check(rc == 0, "Error receiving field.");
+    }
+    http_sock
+
+
+
+
 
     return rc;
 
