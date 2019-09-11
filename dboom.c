@@ -41,31 +41,27 @@ coroutine void boom(struct parsed_url *purl, const char *url, unsigned int nreqs
     sock = http_attach(sock);
     check(sock >= 0, "Could not attach HTTP protocol.");
 
-
     /* Send requests */
     for(i = nreqs; i > 0; --i) {
         rs = reqstats_new();
         /* stats coroutine responsible for freeing stats */
         check_mem(rs != NULL);
-        if(make_http_request(sock, purl, timeout, rs) == 0) {
-            rc = chsend(stats_ch[1], rs, sizeof(rs), -1);
-            check(rc == 0, "Failed to send request stats");
-        }
+        rc = make_http_request(sock, purl, timeout, rs);
+        check(rc == 0, "Failed sending HTTP request");
+        rc = chsend(stats_ch[1], rs, sizeof(rs), -1);
+        check(rc == 0, "Failed to send request stats");
     }
 
     /* Fall through */
 
 error:
+    if(rs) free(rs);
+
     if(sock >= 0) {
         sock = http_detach(sock, now() + 5000);
         if(sock < 0) {
             perror("Could not detach http protocol.");
             return;
-        }
-        while(1) {
-            unsigned char c;
-            rc = brecv(sock, &c, 1, now() + 5000);
-            if(rc == -1 && ((errno == EPIPE) || (ECONNRESET))) break;
         }
         if(strcmp(purl->scheme, "https") == 0) {
             sock = tls_detach(sock, now() + 5000);
