@@ -26,36 +26,36 @@ coroutine void boom(struct parsed_url *purl, const char *url, unsigned int nreqs
     int rc = 0;
     int sock = -1;
     int i;
-    struct reqstats *rs = NULL;
+    struct reqstats *prs = NULL;
 
     /* Set up the http/s connection */
     sock = happyeyeballs_connect(purl->host, purl->port, now() + 2000);
     check(sock >= 0, "Could not connect to host, %s:%d",
             purl->host, purl->port);
-    /* Layer TLS is using HTTPS */
+    /* Layer TLS on TCP if using HTTPS */
     if(strcmp(purl->scheme, "https") == 0) {
         sock = tls_attach_client(sock, now() + 1000);
         check(sock >= 0, "Could not attach tls protocol.");
     }
-    /* Now for HTTP protocol */
+    /* Layer HTTP protocol */
     sock = http_attach(sock);
     check(sock >= 0, "Could not attach HTTP protocol.");
 
     /* Send requests */
     for(i = nreqs; i > 0; --i) {
-        rs = reqstats_new();
+        prs = reqstats_new();
         /* stats coroutine responsible for freeing stats */
-        check_mem(rs != NULL);
-        rc = make_http_request(sock, purl, timeout, rs);
+        check_mem(prs != NULL);
+        rc = make_http_request(sock, purl, timeout, prs);
         check(rc == 0, "Failed sending HTTP request");
-        rc = chsend(stats_ch[1], rs, sizeof(rs), -1);
+        rc = chsend(stats_ch[1], &prs, sizeof(prs), -1);
         check(rc == 0, "Failed to send request stats");
     }
 
     /* Fall through */
 
 error:
-    if(rs) free(rs);
+    if(prs) reqstats_free(prs);
 
     if(sock >= 0) {
         sock = http_detach(sock, now() + 5000);
@@ -80,11 +80,11 @@ coroutine void stats(int stats_ch[2], int verbose)
 {
     int rc = 0;
     int nrequests = 0;
-    struct reqstats *rs = NULL;
+    struct reqstats *prs = NULL;
     unsigned int total = 0;
 
     while(1) {
-        rc = chrecv(stats_ch[0], &rs, sizeof(rs), -1);
+        rc = chrecv(stats_ch[0], &prs, sizeof(prs), -1);
         if(rc != 0) {
             if(errno != EPIPE) {
                 /* We expect to get EPIPE when main closes stats channel */
@@ -96,12 +96,12 @@ coroutine void stats(int stats_ch[2], int verbose)
         }
 
         /* Request stats available */
-        if(rs != NULL) {
+        if(prs != NULL) {
             nrequests++;
-            total += rs->tm;
+            total += prs->tm;
             if(verbose)
-                printf("%d,%ld\n", rs->http_code, rs->tm);
-            reqstats_free(rs);
+                printf("%d,%ld\n", prs->http_code, prs->tm);
+            reqstats_free(prs);
         }
     }
 
