@@ -49,10 +49,8 @@ make_http_request(int http_sock, struct parsed_url *purl, int timeout,
     check(rc == 0, "Error sending GET request");
     rc = http_sendfield(http_sock, "Host", purl->host, -1);
     check(rc == 0, "Error sending Host field");
-    rc = http_sendfield(http_sock, "Connection", "close", -1);
-    check(rc == 0, "Error sending Connection field");
     rc = http_done(http_sock, -1);
-    check(rc == 0, "Error sending Connection field");
+    check(rc == 0, "Error in http_done");
 
     /* read the http server response. */
     char reason[256];
@@ -60,18 +58,19 @@ make_http_request(int http_sock, struct parsed_url *purl, int timeout,
     check(rc != -1, "Error receiving status");
     pstats->http_code = rc;
 
-    /* Read all remaining data */
+    /* Read all remaining data until no more to read and silently drop */
     char remaining[1024];
     while(1) {
-        rc = mrecv();
+        rc = brecv(http_sock, remaining, sizeof(remaining), now() + 1000);
+        if(rc == -1 && ((errno == EPIPE) || (ECONNRESET))) break;
+        check(rc == 0, "Unexpected error while receiving response");
     }
-    int64_t end_req = now();
-    pstats->resptime = blah;
+
+    pstats->tm = now() - start_req;
 
     return 0;
 
 error:
-
     return -1;
 }
 
