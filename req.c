@@ -30,11 +30,11 @@ void reqstats_free(struct reqstats *prs) {
 }
 
 int
-make_http_request(int http_sock, struct parsed_url *purl, int timeout,
+make_http_request(int sock, struct parsed_url *purl, int timeout,
                     struct reqstats *pstats) {
     int rc = 0;
 
-    check(http_sock >= 0, "Bad HTTP socket. http_sock = %d", http_sock);
+    check(sock >= 0, "Bad socket. sock = %d", sock);
     check(purl != NULL, "purl is NULL.");
     check(pstats != NULL, "pstats is NULL.");
     check(timeout >= 0, "Bad timeout value. timeout = %d", timeout);
@@ -43,6 +43,10 @@ make_http_request(int http_sock, struct parsed_url *purl, int timeout,
         "Expect pstats->http_code to be zero. pstats->http_code = %d",
         pstats->http_code);
     
+    /* Layer HTTP protocol */
+    int http_sock = http_attach(sock);
+    check(http_sock >= 0, "Could not attach HTTP protocol.");
+
     /* Start timing now */
     int64_t start_req = now();
     rc = http_sendrequest(http_sock, "GET", purl->path ? purl->path : "/", -1);
@@ -58,7 +62,7 @@ make_http_request(int http_sock, struct parsed_url *purl, int timeout,
     check(rc != -1, "Error receiving status");
     pstats->http_code = rc;
 
-    /* Read all remaining data until no more to read and silently drop */
+    /* Read all remaining data */
     char remaining[1024];
     while(1) {
         rc = brecv(http_sock, remaining, sizeof(remaining), now() + 1000);
@@ -67,6 +71,8 @@ make_http_request(int http_sock, struct parsed_url *purl, int timeout,
     }
 
     pstats->tm = now() - start_req;
+    check(http_detach(http_sock, now() + 1000) >= sock,
+            "Unexpected underlying socket");
 
     return 0;
 

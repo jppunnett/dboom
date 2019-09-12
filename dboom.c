@@ -37,9 +37,6 @@ coroutine void boom(struct parsed_url *purl, const char *url, unsigned int nreqs
         sock = tls_attach_client(sock, now() + 1000);
         check(sock >= 0, "Could not attach tls protocol.");
     }
-    /* Layer HTTP protocol */
-    sock = http_attach(sock);
-    check(sock >= 0, "Could not attach HTTP protocol.");
 
     /* Send requests */
     for(i = nreqs; i > 0; --i) {
@@ -58,11 +55,6 @@ error:
     if(prs) reqstats_free(prs);
 
     if(sock >= 0) {
-        sock = http_detach(sock, now() + 5000);
-        if(sock < 0) {
-            perror("Could not detach http protocol.");
-            return;
-        }
         if(strcmp(purl->scheme, "https") == 0) {
             sock = tls_detach(sock, now() + 5000);
             if(sock < 0) {
