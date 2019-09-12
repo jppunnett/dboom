@@ -24,48 +24,22 @@ coroutine void boom(struct parsed_url *purl, const char *url, unsigned int nreqs
     assert(purl->port != 0);
 
     int rc = 0;
-    int sock = -1;
     int i;
     struct reqstats *prs = NULL;
-
-    /* Set up the http/s connection */
-    sock = happyeyeballs_connect(purl->host, purl->port, now() + 2000);
-    check(sock >= 0, "Could not connect to host, %s:%d",
-            purl->host, purl->port);
-    /* Layer TLS on TCP if using HTTPS */
-    if(strcmp(purl->scheme, "https") == 0) {
-        sock = tls_attach_client(sock, now() + 1000);
-        check(sock >= 0, "Could not attach tls protocol.");
-    }
 
     /* Send requests */
     for(i = nreqs; i > 0; --i) {
         prs = reqstats_new();
         /* stats coroutine responsible for freeing stats */
         check_mem(prs != NULL);
-        rc = make_http_request(sock, purl, timeout, prs);
+        rc = make_http_request(purl, timeout, prs);
         check(rc == 0, "Failed sending HTTP request");
         rc = chsend(stats_ch[1], &prs, sizeof(prs), -1);
-        check(rc == 0, "Failed to send request stats");
+        check(rc == 0, "Failed sending request stats");
     }
-
-    /* Fall through */
 
 error:
     if(prs) reqstats_free(prs);
-
-    if(sock >= 0) {
-        if(strcmp(purl->scheme, "https") == 0) {
-            sock = tls_detach(sock, now() + 5000);
-            if(sock < 0) {
-                perror("Could not detach tls protocol.");
-                return;
-            }
-        }
-        rc = tcp_close(sock, now() + 5000);
-        if(rc != 0)
-            perror("Error closing TCP connection.");
-    }
 }
 
 coroutine void stats(int stats_ch[2], int verbose)

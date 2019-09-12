@@ -30,49 +30,64 @@ void reqstats_free(struct reqstats *prs) {
 }
 
 int
-make_http_request(int sock, struct parsed_url *purl, int timeout,
+make_http_request(struct parsed_url *purl, int timeout,
                     struct reqstats *pstats) {
     int rc = 0;
 
-    check(sock >= 0, "Bad socket. sock = %d", sock);
     check(purl != NULL, "purl is NULL.");
     check(pstats != NULL, "pstats is NULL.");
     check(timeout >= 0, "Bad timeout value. timeout = %d", timeout);
-    check(pstats->tm == 0, "Expect pstats->tm == 0. pstats->tm");
-    check(pstats->http_code == 0,
-        "Expect pstats->http_code to be zero. pstats->http_code = %d",
-        pstats->http_code);
     
-    /* Layer HTTP protocol */
-    int http_sock = http_attach(sock);
-    check(http_sock >= 0, "Could not attach HTTP protocol.");
+    /* Set up the http/s connection */
+    int s = happyeyeballs_connect(purl->host, purl->port, now() + 2000);
+    check(s >= 0, "Could not connect to host, %s:%d",
+            purl->host, purl->port);
 
-    /* Start timing now */
+    /* Attach TLS if using HTTPS */
+    if(strcmp(purl->scheme, "https") == 0) {
+        s = tls_attach_client(s, now() + 1000);
+        check(s >= 0, "Could not attach tls protocol.");
+    }
+
+    /* Attach HTTP protocol */
+    s = http_attach(s);
+    check(s >= 0, "Could not attach HTTP protocol.");
+
+    /* Start timing the request now */
     int64_t start_req = now();
-    rc = http_sendrequest(http_sock, "GET", purl->path ? purl->path : "/", -1);
+    rc = http_sendrequest(s, "GET", purl->path ? purl->path : "/", -1);
     check(rc == 0, "Error sending GET request");
-    rc = http_sendfield(http_sock, "Host", purl->host, -1);
+    rc = http_sendfield(s, "Host", purl->host, -1);
     check(rc == 0, "Error sending Host field");
-    rc = http_done(http_sock, -1);
+    rc = http_done(s, -1);
     check(rc == 0, "Error in http_done");
 
     /* read the http server response. */
     char reason[256];
-    rc = http_recvstatus(http_sock, reason, sizeof(reason), now() + timeout);
+    rc = http_recvstatus(s, reason, sizeof(reason), now() + timeout);
     check(rc != -1, "Error receiving status");
     pstats->http_code = rc;
 
     /* Read all remaining data */
     char remaining[1024];
     while(1) {
-        rc = brecv(http_sock, remaining, sizeof(remaining), now() + 1000);
+        rc = brecv(s, remaining, sizeof(remaining), now() + 1000);
         if(rc == -1 && ((errno == EPIPE) || (ECONNRESET))) break;
         check(rc == 0, "Unexpected error while receiving response");
     }
 
+    /* End timing request */
     pstats->tm = now() - start_req;
-    check(http_detach(http_sock, now() + 1000) >= sock,
-            "Unexpected underlying socket");
+
+    /* Clean up */
+    s = http_detach(s, now() + 1000);
+    check(s, "Error while detaching");
+    if(strcmp(purl->scheme, "https") == 0) {
+        s = tls_detach(s, now() + 1000);
+        check(s >= 0, "Could not detach tls protocol.");
+    }
+    rc = tcp_close(s, now() + 1000);
+    check(rc == 0, "Error closing TCP connection.");
 
     return 0;
 
