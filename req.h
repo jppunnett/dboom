@@ -11,16 +11,16 @@ struct reqstats {
 	unsigned int http_code;
 };
 
-/* MakeRequest: issues a GET for the resource pointed to by url
+/* make_http_request: issues a GET for the resource pointed to by url
    Returns 0 if got a response from server, otherwise returns -1.
    reqstats contains server response time and HTTP code.
 */
-int MakeRequest(const char*, int, struct reqstats*);
-
 int make_http_request(struct parsed_url *purl, int timeout, struct reqstats *pstats);
 
+/* reqstats_new: returns a pointer to new reqstats struct.
+ * Call reqstats_free to cleanup.
+ */
 struct reqstats* reqstats_new();
-
 void reqstats_free(struct reqstats *prs);
 
 #endif
