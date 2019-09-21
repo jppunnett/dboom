@@ -36,6 +36,7 @@ coroutine void boom(struct parsed_url *purl, const char *url, unsigned int nreqs
         check(rc == 0, "Failed sending HTTP request");
         rc = chsend(stats_ch[1], &prs, sizeof(prs), -1);
         check(rc == 0, "Failed sending request stats");
+        prs = NULL;
     }
 
 error:
