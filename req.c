@@ -22,45 +22,44 @@ void reqstats_free(struct reqstats *prs) {
 }
 
 int
-make_http_request(struct parsed_url *purl, int timeout,
+make_http_request(struct parsed_url *purl, unsigned int timeout,
                     struct reqstats *pstats) {
     int rc = 0;
+    int err = 0;
 
-    check(purl != NULL, "purl is NULL.");
-    check(pstats != NULL, "pstats is NULL.");
-    check(timeout >= 0, "Bad timeout value. timeout = %d", timeout);
-    
+    if(purl == NULL || pstats == NULL ) {err = EINVAL; goto exit1;}
     /* Set up the http/s connection */
     int s = happyeyeballs_connect(purl->host, purl->port, now() + 2000);
-    check(s >= 0, "Could not connect to host, %s:%d",
-            purl->host, purl->port);
-
+    if(s < 0) {err = errno; goto exit1;}
     /* Attach TLS if using HTTPS */
-    if(strcmp(purl->scheme, "https") == 0) {
+    int is_https = strcmp(purl->scheme, "https") == 0;
+    if(is_https) {
         s = tls_attach_client(s, now() + 1000);
-        check(s >= 0, "Could not attach tls protocol.");
+        if(s < 0) {err = errno; goto exit2;}
     }
-
     /* Attach HTTP protocol */
     s = http_attach(s);
-    check(s >= 0, "Could not attach HTTP protocol.");
+    if(s < 0) {err = errno; goto exit3;}
 
     /* Send request and start timer */
     int64_t start_req = now();
     rc = http_sendrequest(s, "GET", purl->path ? purl->path : "/",
             now() + 1000);
-    check(rc == 0, "Error sending GET request");
-    rc = http_sendfield(s, "Host", purl->host, now() + 1000);
-    check(rc == 0, "Error sending Host header");
-    rc = http_sendfield(s, "Connection", "close", now() + 1000);
-    check(rc == 0, "Error sending Connection header");
-    rc = http_done(s, now() + 1000);
-    check(rc == 0, "Error in http_done");
+    if(rc != 0) {err = errno; goto exit4;}
 
-    /* Read the http server response. */
+    rc = http_sendfield(s, "Host", purl->host, now() + 1000);
+    if(rc != 0) {err = errno; goto exit4;}
+
+    rc = http_sendfield(s, "Connection", "close", now() + 1000);
+    if(rc != 0) {err = errno; goto exit4;}
+
+    rc = http_done(s, now() + 1000);
+    if(rc != 0) {err = errno; goto exit4;}
+
+    /* Read and store the http server response. */
     char reason[256];
     rc = http_recvstatus(s, reason, sizeof(reason), now() + timeout);
-    check(rc != -1, "Error receiving status");
+    if(rc < 0) {err = errno; goto exit4;}
     pstats->http_code = rc;
 
     /* Read the response headers */
@@ -70,34 +69,38 @@ make_http_request(struct parsed_url *purl, int timeout,
         rc = http_recvfield(s, name, sizeof(name), value, sizeof(value),
                 now() + 1000);
         if(rc == -1 && ((errno == EPIPE) || (ECONNRESET))) break;
-        check(rc == 0, "Error reading response headers.");
+        if(rc != 0) {err = errno; goto exit4;}
     }
 
     /* Detach http and read response body */
     s = http_detach(s, now() + 1000);
-    check(s, "Error detaching http protocol");
+    if(s < 0) {err = errno; goto exit3;}
 
     char remaining[1024];
     while(1) {
         rc = brecv(s, remaining, sizeof(remaining), now() + 1000);
         if(rc == -1 && ((errno == EPIPE) || (ECONNRESET))) break;
-        check(rc == 0, "Error reading response body");
+        if(rc != 0) {err = errno; goto exit3;}
     }
 
     /* Save http request duration. */
     pstats->tm = now() - start_req;
 
-    if(strcmp(purl->scheme, "https") == 0) {
-        debug("detacthing TLS");
+    goto exit3;
+
+exit4:
+    s = http_detach(s, now() + 1000);
+    assert(s >= 0 && "Error detaching HTTP");
+exit3:
+    if(is_https) {
         s = tls_detach(s, now() + 1000);
-        check(s >= 0, "Could not detach tls protocol.");
+        assert(s >= 0 && "Error detaching TLS");
     }
+exit2:
     rc = tcp_close(s, now() + 1000);
-    check(rc == 0, "Error closing TCP connection.");
-
-    return 0;
-
-error:
-    return -1;
+    assert(rc == 0 && "Error closing TCP connection.");
+exit1:
+    errno = err;
+    return rc;
 }
 

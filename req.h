@@ -15,7 +15,8 @@ struct reqstats {
    Returns 0 if got a response from server, otherwise returns -1.
    reqstats contains server response time and HTTP code.
 */
-int make_http_request(struct parsed_url *purl, int timeout, struct reqstats *pstats);
+int make_http_request(struct parsed_url *purl, unsigned int timeout,
+                        struct reqstats *pstats);
 
 /* reqstats_new: returns a pointer to new reqstats struct.
  * Call reqstats_free to cleanup.
