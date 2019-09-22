@@ -1,20 +1,14 @@
 /* req.c */
 #include <assert.h>
 #include <libdill.h>
+#include <string.h>
 
 #include "req.h"
 #include "url.h"
-#include "dbg.h"
 
 
 struct reqstats* reqstats_new() {
-    struct reqstats *prs = NULL;
-    prs = calloc(1, sizeof(struct reqstats));
-    check_mem(prs != NULL);
-    return prs;
-
-error:
- return NULL;
+    return calloc(1, sizeof(struct reqstats));
 }
 
 void reqstats_free(struct reqstats *prs) {
