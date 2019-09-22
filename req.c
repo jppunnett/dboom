@@ -29,7 +29,12 @@ make_http_request(struct parsed_url *purl, unsigned int timeout,
     int is_https = strcmp(purl->scheme, "https") == 0;
     if(is_https) {
         s = tls_attach_client(s, now() + 1000);
+        /* s could be >= 0 even if there's a TLS error. This can happen if
+         * talking SSL to server listing for HTTP only. I think libdill should
+         * invalidate the socket in this case but it doesn't.
+         */
         if(s < 0) {err = errno; goto exit2;}
+        if(errno) {err = errno; goto exit3;}
     }
     /* Attach HTTP protocol */
     s = http_attach(s);
