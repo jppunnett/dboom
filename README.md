@@ -3,8 +3,7 @@ Boom using libdill and libcurl C libraries.
 
 A C version of "hey" (https://github.com/rakyll/hey) using the excellent:
 
-- libdill v2.14 (https://github.com/sustrik/libdill) and
-- libcurl (https://curl.haxx.se/libcurl)
+- libdill v2.14 (https://github.com/sustrik/libdill)
 
 ## Usage
 
@@ -19,7 +18,7 @@ A C version of "hey" (https://github.com/rakyll/hey) using the excellent:
 		-v verbose  Output each request's statistics.
 
 ## TODO
-- replace curl with libdill sockets
+
 - Use Travis
 - Handle more than one URL
 - Take advantage of multiple cores
