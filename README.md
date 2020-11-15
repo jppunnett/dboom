@@ -1,5 +1,5 @@
 # dboom
-Boom using libdill and libcurl C libraries.
+Boom using libdill.
 
 A C version of "hey" (https://github.com/rakyll/hey) using the excellent:
 
